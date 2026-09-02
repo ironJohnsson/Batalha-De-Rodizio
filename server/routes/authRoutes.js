@@ -28,12 +28,37 @@ router.post('/register', (req, res) => {
     const result = insertUser.run(cleanNickname, password_hash);
     const userId = result.lastInsertRowid;
 
-    // Initialize stats
+    // Check if this nickname has past games or wins played before registering
+    const pastStats = db.prepare(`
+      SELECT 
+        COUNT(*) as total_battles,
+        COALESCE(SUM(slice_count), 0) as total_slices,
+        COALESCE(MAX(slice_count), 0) as max_slices
+      FROM room_participants
+      WHERE nickname = ? COLLATE NOCASE
+    `).get(cleanNickname);
+
+    const pastWins = db.prepare(`
+      SELECT COUNT(*) as wins
+      FROM rooms
+      WHERE winner_nickname = ? COLLATE NOCASE AND status = 'finished'
+    `).get(cleanNickname);
+
+    const totalBattles = pastStats.total_battles || 0;
+    const wins = pastWins.wins || 0;
+    const totalSlices = pastStats.total_slices || 0;
+    const maxSlices = pastStats.max_slices || 0;
+    const avgSlices = totalBattles > 0 ? Number((totalSlices / totalBattles).toFixed(1)) : 0.0;
+
+    // Link past room records to this newly registered user_id
+    db.prepare('UPDATE room_participants SET user_id = ? WHERE nickname = ? COLLATE NOCASE').run(userId, cleanNickname);
+
+    // Initialize stats with past achievements included!
     const initStats = db.prepare(`
       INSERT INTO user_stats (user_id, total_battles, wins, total_slices, max_slices, avg_slices)
-      VALUES (?, 0, 0, 0, 0, 0.0)
+      VALUES (?, ?, ?, ?, ?, ?)
     `);
-    initStats.run(userId);
+    initStats.run(userId, totalBattles, wins, totalSlices, maxSlices, avgSlices);
 
     const user = { id: userId, nickname: cleanNickname };
     const token = generateToken(user);
@@ -43,11 +68,11 @@ router.post('/register', (req, res) => {
       token,
       user,
       stats: {
-        total_battles: 0,
-        wins: 0,
-        total_slices: 0,
-        max_slices: 0,
-        avg_slices: 0.0
+        total_battles: totalBattles,
+        wins,
+        total_slices: totalSlices,
+        max_slices: maxSlices,
+        avg_slices: avgSlices
       }
     });
   } catch (err) {

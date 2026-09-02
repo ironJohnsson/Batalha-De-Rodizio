@@ -224,13 +224,22 @@ function finishRoom({ code, socketId, requesterUserId }) {
 
     const transaction = db.transaction(() => {
       for (const p of participantsList) {
-        insertParticipantStmt.run(code, p.userId || null, p.nickname, p.slices);
+        // Resolve target user ID either from session or by registered nickname
+        let targetUserId = p.userId;
+        if (!targetUserId) {
+          const userRec = db.prepare('SELECT id FROM users WHERE nickname = ? COLLATE NOCASE').get(p.nickname);
+          if (userRec) {
+            targetUserId = userRec.id;
+          }
+        }
 
-        // If participant is a registered user, update lifetime stats
-        if (p.userId) {
-          const isWinner = topScorers.some(winner => winner.userId === p.userId) ? 1 : 0;
+        insertParticipantStmt.run(code, targetUserId || null, p.nickname, p.slices);
+
+        // If participant is a registered user (or matched by nickname), update lifetime stats
+        if (targetUserId) {
+          const isWinner = topScorers.some(winner => winner.nickname.toLowerCase() === p.nickname.toLowerCase()) ? 1 : 0;
           updateStatsStmt.run(
-            p.userId,
+            targetUserId,
             isWinner,
             p.slices,
             p.slices,
