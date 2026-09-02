@@ -5,6 +5,7 @@ const cors = require('cors');
 const path = require('path');
 require('dotenv').config();
 
+const { initDb } = require('./db');
 const authRoutes = require('./routes/authRoutes');
 const statsRoutes = require('./routes/statsRoutes');
 const roomsManager = require('./roomsManager');
@@ -45,9 +46,9 @@ io.on('connection', (socket) => {
   console.log(`[Socket] Conectado: ${socket.id}`);
 
   // Create Room
-  socket.on('room:create', ({ name, hostUserId, hostNickname }, callback) => {
+  socket.on('room:create', async ({ name, hostUserId, hostNickname }, callback) => {
     try {
-      const room = roomsManager.createRoom({
+      const room = await roomsManager.createRoom({
         name,
         hostUserId,
         hostNickname: hostNickname || 'Anfitrião',
@@ -119,9 +120,9 @@ io.on('connection', (socket) => {
   });
 
   // Finish Room (Only Host allowed)
-  socket.on('room:finish', ({ code, userId }, callback) => {
+  socket.on('room:finish', async ({ code, userId }, callback) => {
     try {
-      const result = roomsManager.finishRoom({
+      const result = await roomsManager.finishRoom({
         code,
         socketId: socket.id,
         requesterUserId: userId || null
@@ -160,6 +161,12 @@ app.use((req, res, next) => {
 });
 
 const PORT = process.env.PORT || 4000;
-server.listen(PORT, '0.0.0.0', () => {
-  console.log(`Servidor ContaRodizio rodando na porta ${PORT} (0.0.0.0:${PORT})`);
+
+// Initialize database tables then start listening
+initDb().then(() => {
+  server.listen(PORT, '0.0.0.0', () => {
+    console.log(`Servidor ContaRodizio rodando na porta ${PORT} (0.0.0.0:${PORT})`);
+  });
+}).catch(err => {
+  console.error('Falha ao iniciar banco de dados:', err);
 });

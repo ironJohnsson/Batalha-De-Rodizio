@@ -1,13 +1,13 @@
 const express = require('express');
 const router = express.Router();
-const db = require('../db');
+const { db } = require('../db');
 const { authMiddleware } = require('../auth');
 
 // GET /api/stats/leaderboard - Top rankings across all rooms & users
-router.get('/leaderboard', (req, res) => {
+router.get('/leaderboard', async (req, res) => {
   try {
     // 1. Get all room winners (both registered users and guest champions)
-    const winnersQuery = db.prepare(`
+    const winnersRes = await db.execute(`
       SELECT 
         r.winner_nickname as nickname,
         COUNT(r.code) as wins,
@@ -22,10 +22,10 @@ router.get('/leaderboard', (req, res) => {
       GROUP BY r.winner_nickname
       ORDER BY wins DESC, total_slices DESC
       LIMIT 10
-    `).all();
+    `);
 
     // 2. Also include any registered users who played games even if 0 wins
-    const registeredQuery = db.prepare(`
+    const regRes = await db.execute(`
       SELECT 
         u.nickname,
         s.wins,
@@ -36,13 +36,13 @@ router.get('/leaderboard', (req, res) => {
       FROM user_stats s
       JOIN users u ON s.user_id = u.id
       WHERE s.total_battles > 0
-    `).all();
+    `);
 
     const map = new Map();
-    for (const w of winnersQuery) {
+    for (const w of winnersRes.rows) {
       map.set(w.nickname.toLowerCase(), w);
     }
-    for (const r of registeredQuery) {
+    for (const r of regRes.rows) {
       if (!map.has(r.nickname.toLowerCase())) {
         map.set(r.nickname.toLowerCase(), r);
       } else {
@@ -63,10 +63,10 @@ router.get('/leaderboard', (req, res) => {
 });
 
 // GET /api/stats/history - Match history for the logged-in user
-router.get('/history', authMiddleware, (req, res) => {
+router.get('/history', authMiddleware, async (req, res) => {
   try {
-    const history = db.prepare(`
-      SELECT 
+    const histRes = await db.execute({
+      sql: `SELECT 
         r.code,
         r.name as room_name,
         r.winner_nickname,
@@ -77,10 +77,11 @@ router.get('/history', authMiddleware, (req, res) => {
       JOIN rooms r ON rp.room_code = r.code
       WHERE (rp.user_id = ? OR rp.nickname = ? COLLATE NOCASE) AND r.status = 'finished'
       ORDER BY r.finished_at DESC
-      LIMIT 20
-    `).all(req.user.id, req.user.nickname);
+      LIMIT 20`,
+      args: [req.user.id, req.user.nickname]
+    });
 
-    return res.json({ history });
+    return res.json({ history: histRes.rows });
   } catch (err) {
     console.error('Erro no histórico:', err);
     return res.status(500).json({ error: 'Erro ao buscar histórico de rodízios.' });

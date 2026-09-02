@@ -1,10 +1,10 @@
 const express = require('express');
 const router = express.Router();
-const db = require('../db');
+const { db } = require('../db');
 const { hashPassword, comparePassword, generateToken, authMiddleware } = require('../auth');
 
 // POST /api/auth/register
-router.post('/register', (req, res) => {
+router.post('/register', async (req, res) => {
   const { nickname, password } = req.body;
 
   if (!nickname || typeof nickname !== 'string' || nickname.trim().length < 2) {
@@ -18,47 +18,58 @@ router.post('/register', (req, res) => {
   const cleanNickname = nickname.trim();
 
   try {
-    const existing = db.prepare('SELECT id FROM users WHERE nickname = ? COLLATE NOCASE').get(cleanNickname);
-    if (existing) {
+    const existing = await db.execute({
+      sql: 'SELECT id FROM users WHERE nickname = ? COLLATE NOCASE',
+      args: [cleanNickname]
+    });
+    if (existing.rows.length > 0) {
       return res.status(409).json({ error: 'Este apelido já está em uso. Escolha outro ou faça login.' });
     }
 
     const password_hash = hashPassword(password);
-    const insertUser = db.prepare('INSERT INTO users (nickname, password_hash) VALUES (?, ?)');
-    const result = insertUser.run(cleanNickname, password_hash);
-    const userId = result.lastInsertRowid;
+    const insertUser = await db.execute({
+      sql: 'INSERT INTO users (nickname, password_hash) VALUES (?, ?)',
+      args: [cleanNickname, password_hash]
+    });
+    const userId = Number(insertUser.lastInsertRowid);
 
     // Check if this nickname has past games or wins played before registering
-    const pastStats = db.prepare(`
-      SELECT 
+    const pastStatsRes = await db.execute({
+      sql: `SELECT 
         COUNT(*) as total_battles,
         COALESCE(SUM(slice_count), 0) as total_slices,
         COALESCE(MAX(slice_count), 0) as max_slices
       FROM room_participants
-      WHERE nickname = ? COLLATE NOCASE
-    `).get(cleanNickname);
+      WHERE nickname = ? COLLATE NOCASE`,
+      args: [cleanNickname]
+    });
+    const pastStats = pastStatsRes.rows[0] || {};
 
-    const pastWins = db.prepare(`
-      SELECT COUNT(*) as wins
+    const pastWinsRes = await db.execute({
+      sql: `SELECT COUNT(*) as wins
       FROM rooms
-      WHERE winner_nickname = ? COLLATE NOCASE AND status = 'finished'
-    `).get(cleanNickname);
+      WHERE winner_nickname = ? COLLATE NOCASE AND status = 'finished'`,
+      args: [cleanNickname]
+    });
+    const pastWins = pastWinsRes.rows[0] || {};
 
-    const totalBattles = pastStats.total_battles || 0;
-    const wins = pastWins.wins || 0;
-    const totalSlices = pastStats.total_slices || 0;
-    const maxSlices = pastStats.max_slices || 0;
+    const totalBattles = Number(pastStats.total_battles) || 0;
+    const wins = Number(pastWins.wins) || 0;
+    const totalSlices = Number(pastStats.total_slices) || 0;
+    const maxSlices = Number(pastStats.max_slices) || 0;
     const avgSlices = totalBattles > 0 ? Number((totalSlices / totalBattles).toFixed(1)) : 0.0;
 
     // Link past room records to this newly registered user_id
-    db.prepare('UPDATE room_participants SET user_id = ? WHERE nickname = ? COLLATE NOCASE').run(userId, cleanNickname);
+    await db.execute({
+      sql: 'UPDATE room_participants SET user_id = ? WHERE nickname = ? COLLATE NOCASE',
+      args: [userId, cleanNickname]
+    });
 
     // Initialize stats with past achievements included!
-    const initStats = db.prepare(`
-      INSERT INTO user_stats (user_id, total_battles, wins, total_slices, max_slices, avg_slices)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `);
-    initStats.run(userId, totalBattles, wins, totalSlices, maxSlices, avgSlices);
+    await db.execute({
+      sql: 'INSERT INTO user_stats (user_id, total_battles, wins, total_slices, max_slices, avg_slices) VALUES (?, ?, ?, ?, ?, ?)',
+      args: [userId, totalBattles, wins, totalSlices, maxSlices, avgSlices]
+    });
 
     const user = { id: userId, nickname: cleanNickname };
     const token = generateToken(user);
@@ -82,7 +93,7 @@ router.post('/register', (req, res) => {
 });
 
 // POST /api/auth/login
-router.post('/login', (req, res) => {
+router.post('/login', async (req, res) => {
   const { nickname, password } = req.body;
 
   if (!nickname || !password) {
@@ -90,7 +101,11 @@ router.post('/login', (req, res) => {
   }
 
   try {
-    const user = db.prepare('SELECT * FROM users WHERE nickname = ? COLLATE NOCASE').get(nickname.trim());
+    const userRes = await db.execute({
+      sql: 'SELECT * FROM users WHERE nickname = ? COLLATE NOCASE',
+      args: [nickname.trim()]
+    });
+    const user = userRes.rows[0];
     if (!user) {
       return res.status(401).json({ error: 'Apelido ou senha incorretos.' });
     }
@@ -100,7 +115,11 @@ router.post('/login', (req, res) => {
       return res.status(401).json({ error: 'Apelido ou senha incorretos.' });
     }
 
-    const stats = db.prepare('SELECT * FROM user_stats WHERE user_id = ?').get(user.id) || {
+    const statsRes = await db.execute({
+      sql: 'SELECT * FROM user_stats WHERE user_id = ?',
+      args: [user.id]
+    });
+    const stats = statsRes.rows[0] || {
       total_battles: 0,
       wins: 0,
       total_slices: 0,
@@ -126,14 +145,22 @@ router.post('/login', (req, res) => {
 });
 
 // GET /api/auth/me
-router.get('/me', authMiddleware, (req, res) => {
+router.get('/me', authMiddleware, async (req, res) => {
   try {
-    const user = db.prepare('SELECT id, nickname, created_at FROM users WHERE id = ?').get(req.user.id);
+    const userRes = await db.execute({
+      sql: 'SELECT id, nickname, created_at FROM users WHERE id = ?',
+      args: [req.user.id]
+    });
+    const user = userRes.rows[0];
     if (!user) {
       return res.status(404).json({ error: 'Usuário não encontrado.' });
     }
 
-    const stats = db.prepare('SELECT * FROM user_stats WHERE user_id = ?').get(user.id) || {
+    const statsRes = await db.execute({
+      sql: 'SELECT * FROM user_stats WHERE user_id = ?',
+      args: [user.id]
+    });
+    const stats = statsRes.rows[0] || {
       total_battles: 0,
       wins: 0,
       total_slices: 0,
@@ -141,7 +168,6 @@ router.get('/me', authMiddleware, (req, res) => {
       avg_slices: 0.0
     };
 
-    // Calculate fun rank/title based on avg_slices and total_slices (strictly no emojis!)
     let title = 'Iniciante no Rodízio';
     if (stats.max_slices >= 25 || stats.total_slices >= 100) {
       title = 'Lenda Suprema do Rodízio';
@@ -167,4 +193,3 @@ router.get('/me', authMiddleware, (req, res) => {
 });
 
 module.exports = router;
-

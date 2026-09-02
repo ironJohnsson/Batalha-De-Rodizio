@@ -1,7 +1,6 @@
-const db = require('./db');
+const { db } = require('./db');
 
 // In-memory active rooms state for ultra-fast synchronization
-// Structure: Map<roomCode, { code, name, hostSocketId, hostUserId, hostNickname, status, participants: Map<socketId, { socketId, userId, nickname, slices, joinedAt }>, logs: [] }>
 const activeRooms = new Map();
 
 function generateRoomCode() {
@@ -13,7 +12,7 @@ function generateRoomCode() {
   return code;
 }
 
-function createRoom({ name, hostUserId, hostNickname, hostSocketId }) {
+async function createRoom({ name, hostUserId, hostNickname, hostSocketId }) {
   let code = generateRoomCode();
   while (activeRooms.has(code)) {
     code = generateRoomCode();
@@ -54,11 +53,11 @@ function createRoom({ name, hostUserId, hostNickname, hostSocketId }) {
 
   // Save room stub to DB
   try {
-    const stmt = db.prepare(`
-      INSERT INTO rooms (code, name, host_user_id, status, created_at)
-      VALUES (?, ?, ?, 'active', CURRENT_TIMESTAMP)
-    `);
-    stmt.run(code, roomName, hostUserId || null);
+    await db.execute({
+      sql: `INSERT INTO rooms (code, name, host_user_id, status, created_at)
+      VALUES (?, ?, ?, 'active', CURRENT_TIMESTAMP)`,
+      args: [code, roomName, hostUserId || null]
+    });
   } catch (err) {
     console.error('Erro ao salvar sala no banco:', err.message);
   }
@@ -78,7 +77,7 @@ function joinRoom({ code, socketId, userId, nickname }) {
     return { error: 'Esta competição já foi finalizada.' };
   }
 
-  // Check if participant with same nickname exists in this room (reconnection or rename)
+  // Check if participant with same nickname exists in this room
   let existingEntry = null;
   for (const [sId, p] of room.participants.entries()) {
     if ((userId && p.userId === userId) || p.nickname.toLowerCase() === nickname.toLowerCase()) {
@@ -88,7 +87,6 @@ function joinRoom({ code, socketId, userId, nickname }) {
   }
 
   if (existingEntry) {
-    // Reconnection of existing participant with updated socket ID
     room.participants.delete(existingEntry.oldSocketId);
     room.participants.set(socketId, {
       ...existingEntry.participant,
@@ -97,12 +95,10 @@ function joinRoom({ code, socketId, userId, nickname }) {
       userId: userId || existingEntry.participant.userId
     });
 
-    // If this was the host, update hostSocketId
     if (room.hostSocketId === existingEntry.oldSocketId || (userId && room.hostUserId === userId)) {
       room.hostSocketId = socketId;
     }
   } else {
-    // New participant joining
     room.participants.set(socketId, {
       socketId,
       userId: userId || null,
@@ -138,7 +134,6 @@ function updateSlices({ code, socketId, delta }) {
 
   participant.slices = newSlices;
 
-  // Log activity
   let logText = '';
   if (delta > 0) {
     logText = `${participant.nickname} mandou pra dentro a fatia nº ${newSlices}!`;
@@ -153,7 +148,6 @@ function updateSlices({ code, socketId, delta }) {
     time: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
   });
 
-  // Keep logs at max 30 items
   if (room.logs.length > 30) {
     room.logs.pop();
   }
@@ -161,7 +155,7 @@ function updateSlices({ code, socketId, delta }) {
   return { room: formatRoomPayload(room) };
 }
 
-function finishRoom({ code, socketId, requesterUserId }) {
+async function finishRoom({ code, socketId, requesterUserId }) {
   const room = activeRooms.get(code);
   if (!room) return { error: 'Sala não encontrada.' };
   if (room.status === 'finished') return { error: 'A competição já foi encerrada.' };
@@ -174,7 +168,6 @@ function finishRoom({ code, socketId, requesterUserId }) {
     return { error: 'Apenas o criador/dono da sala tem permissão para finalizar a competição.' };
   }
 
-  // Determine ranking and winner(s)
   const participantsList = Array.from(room.participants.values()).sort((a, b) => b.slices - a.slices);
   const maxSlices = participantsList.length > 0 ? participantsList[0].slices : 0;
   const topScorers = participantsList.filter(p => p.slices === maxSlices && maxSlices > 0);
@@ -197,59 +190,45 @@ function finishRoom({ code, socketId, requesterUserId }) {
     time: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
   });
 
-  // Persist final data to SQLite & update user stats
+  // Persist final data to SQLite / Turso & update user stats
   try {
-    const updateRoomStmt = db.prepare(`
-      UPDATE rooms
-      SET status = 'finished', winner_nickname = ?, finished_at = CURRENT_TIMESTAMP
-      WHERE code = ?
-    `);
-    updateRoomStmt.run(winnerName, code);
-
-    const insertParticipantStmt = db.prepare(`
-      INSERT INTO room_participants (room_code, user_id, nickname, slice_count)
-      VALUES (?, ?, ?, ?)
-    `);
-
-    const updateStatsStmt = db.prepare(`
-      INSERT INTO user_stats (user_id, total_battles, wins, total_slices, max_slices, avg_slices)
-      VALUES (?, 1, ?, ?, ?, ?)
-      ON CONFLICT(user_id) DO UPDATE SET
-        total_battles = total_battles + 1,
-        wins = wins + excluded.wins,
-        total_slices = total_slices + excluded.total_slices,
-        max_slices = MAX(max_slices, excluded.max_slices),
-        avg_slices = ROUND(CAST(total_slices + excluded.total_slices AS REAL) / (total_battles + 1), 1)
-    `);
-
-    const transaction = db.transaction(() => {
-      for (const p of participantsList) {
-        // Resolve target user ID either from session or by registered nickname
-        let targetUserId = p.userId;
-        if (!targetUserId) {
-          const userRec = db.prepare('SELECT id FROM users WHERE nickname = ? COLLATE NOCASE').get(p.nickname);
-          if (userRec) {
-            targetUserId = userRec.id;
-          }
-        }
-
-        insertParticipantStmt.run(code, targetUserId || null, p.nickname, p.slices);
-
-        // If participant is a registered user (or matched by nickname), update lifetime stats
-        if (targetUserId) {
-          const isWinner = topScorers.some(winner => winner.nickname.toLowerCase() === p.nickname.toLowerCase()) ? 1 : 0;
-          updateStatsStmt.run(
-            targetUserId,
-            isWinner,
-            p.slices,
-            p.slices,
-            p.slices
-          );
-        }
-      }
+    await db.execute({
+      sql: `UPDATE rooms SET status = 'finished', winner_nickname = ?, finished_at = CURRENT_TIMESTAMP WHERE code = ?`,
+      args: [winnerName, code]
     });
 
-    transaction();
+    for (const p of participantsList) {
+      let targetUserId = p.userId;
+      if (!targetUserId) {
+        const userRec = await db.execute({
+          sql: 'SELECT id FROM users WHERE nickname = ? COLLATE NOCASE',
+          args: [p.nickname]
+        });
+        if (userRec.rows.length > 0) {
+          targetUserId = userRec.rows[0].id;
+        }
+      }
+
+      await db.execute({
+        sql: `INSERT INTO room_participants (room_code, user_id, nickname, slice_count) VALUES (?, ?, ?, ?)`,
+        args: [code, targetUserId || null, p.nickname, p.slices]
+      });
+
+      if (targetUserId) {
+        const isWinner = topScorers.some(winner => winner.nickname.toLowerCase() === p.nickname.toLowerCase()) ? 1 : 0;
+        await db.execute({
+          sql: `INSERT INTO user_stats (user_id, total_battles, wins, total_slices, max_slices, avg_slices)
+          VALUES (?, 1, ?, ?, ?, ?)
+          ON CONFLICT(user_id) DO UPDATE SET
+            total_battles = total_battles + 1,
+            wins = wins + excluded.wins,
+            total_slices = total_slices + excluded.total_slices,
+            max_slices = MAX(max_slices, excluded.max_slices),
+            avg_slices = ROUND(CAST(total_slices + excluded.total_slices AS REAL) / (total_battles + 1), 1)`,
+          args: [targetUserId, isWinner, p.slices, p.slices, p.slices]
+        });
+      }
+    }
   } catch (err) {
     console.error('Erro ao persistir encerramento da sala no banco:', err);
   }
@@ -264,12 +243,9 @@ function getRoom(code) {
 }
 
 function handleDisconnect(socketId) {
-  // Find which room this socket is in
   for (const [code, room] of activeRooms.entries()) {
     if (room.participants.has(socketId)) {
       const p = room.participants.get(socketId);
-      // We do not immediately remove participant so their slice count remains visible on the board,
-      // but we can log that they got disconnected
       return { code, nickname: p.nickname, room: formatRoomPayload(room) };
     }
   }
@@ -310,4 +286,3 @@ module.exports = {
   getRoom,
   handleDisconnect
 };
-

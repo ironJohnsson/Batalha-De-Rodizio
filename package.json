@@ -10,6 +10,7 @@
     "build": "npm --prefix BatalhaDeRodizio install && npm --prefix BatalhaDeRodizio run build"
   },
   "dependencies": {
+    "@libsql/client": "^0.18.0",
     "bcryptjs": "^3.0.3",
     "better-sqlite3": "^13.0.3",
     "cors": "^2.8.6",
