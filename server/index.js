@@ -29,6 +29,10 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', time: new Date().toISOString() });
 });
 
+// Serve frontend build in production
+const distPath = path.join(__dirname, '../BatalhaDeRodizio/dist');
+app.use(express.static(distPath));
+
 // Setup Socket.IO
 const io = new Server(server, {
   cors: {
@@ -144,8 +148,18 @@ io.on('connection', (socket) => {
   });
 });
 
+// SPA Fallback
+app.get('*', (req, res, next) => {
+  if (req.path.startsWith('/api') || req.path.startsWith('/socket.io')) {
+    return next();
+  }
+  const indexFile = path.join(distPath, 'index.html');
+  res.sendFile(indexFile, (err) => {
+    if (err) next();
+  });
+});
+
 const PORT = process.env.PORT || 4000;
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`Servidor ContaRodizio rodando na porta ${PORT} (0.0.0.0:${PORT})`);
 });
-

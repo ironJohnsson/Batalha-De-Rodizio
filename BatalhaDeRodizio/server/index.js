@@ -29,6 +29,10 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', time: new Date().toISOString() });
 });
 
+// Serve frontend build in production
+const distPath = path.join(__dirname, '../dist');
+app.use(express.static(distPath));
+
 // Setup Socket.IO
 const io = new Server(server, {
   cors: {
@@ -141,6 +145,17 @@ io.on('connection', (socket) => {
 
   socket.on('disconnect', () => {
     console.log(`[Socket] Desconectado: ${socket.id}`);
+  });
+});
+
+// SPA Fallback: rotas desconhecidas entregam o index.html do React
+app.get('*', (req, res, next) => {
+  if (req.path.startsWith('/api') || req.path.startsWith('/socket.io')) {
+    return next();
+  }
+  const indexFile = path.join(distPath, 'index.html');
+  res.sendFile(indexFile, (err) => {
+    if (err) next();
   });
 });
 

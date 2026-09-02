@@ -4,10 +4,19 @@
   "description": "Contador de fatias de rodízio em tempo real com estatísticas e modo escuro nativo",
   "scripts": {
     "dev": "concurrently -n \"SERVER,CLIENT\" -c \"blue,green\" \"npm run server\" \"npm run client\"",
-    "start": "npm run dev",
+    "start": "node server/index.js",
     "server": "node server/index.js",
     "client": "npm --prefix BatalhaDeRodizio run dev",
-    "build": "npm --prefix BatalhaDeRodizio run build"
+    "build": "npm --prefix BatalhaDeRodizio install && npm --prefix BatalhaDeRodizio run build"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "better-sqlite3": "^13.0.3",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "jsonwebtoken": "^9.0.3",
+    "socket.io": "^4.8.3"
   },
   "devDependencies": {
     "concurrently": "^9.1.2"
