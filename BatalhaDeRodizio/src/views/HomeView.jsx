@@ -1,36 +1,40 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { apiRequest } from '../services/api';
-import {
-  Trophy,
-  Flame,
-  Utensils,
-  PlusCircle,
-  Award,
-  History,
-  TrendingUp,
-  BarChart3,
-  Users,
-  ChevronRight,
-  Sparkles,
-  ArrowRight,
-  Crown
+import { 
+  Users, 
+  PlusCircle, 
+  Trophy, 
+  TrendingUp, 
+  Flame, 
+  Utensils, 
+  Award, 
+  History, 
+  ArrowRight, 
+  Sparkles, 
+  User,
+  Lock,
+  CheckCircle2
 } from 'lucide-react';
 
-export default function HomeView({
-  onCreateRoom,
-  onJoinRoom,
-  onOpenAuth,
-  initialCode = ''
+export default function HomeView({ 
+  onCreateRoom, 
+  onJoinRoom, 
+  onOpenAuth, 
+  onOpenProfile, 
+  initialCode 
 }) {
-  const { user, stats, isAuthenticated } = useAuth();
+  const { user, stats, isAuthenticated, login, register } = useAuth();
   const [roomCode, setRoomCode] = useState(initialCode);
   const [roomName, setRoomName] = useState('');
   const [guestNickname, setGuestNickname] = useState('');
+  const [guestPassword, setGuestPassword] = useState('');
+  const [wantAccount, setWantAccount] = useState(false);
   const [activeTab, setActiveTab] = useState('join');
   const [leaderboard, setLeaderboard] = useState({ topWins: [], topSlices: [] });
   const [history, setHistory] = useState([]);
   const [error, setError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     if (initialCode) {
@@ -56,7 +60,7 @@ export default function HomeView({
     loadData();
   }, [isAuthenticated]);
 
-  const handleJoin = (e) => {
+  const handleJoin = async (e) => {
     e.preventDefault();
     setError('');
     const code = roomCode.trim().toUpperCase();
@@ -72,14 +76,39 @@ export default function HomeView({
       return;
     }
 
-    onJoinRoom({
-      code,
-      userId: user?.id || null,
-      nickname
-    });
+    setIsSubmitting(true);
+
+    try {
+      // If user typed a password, authenticate or register on the fly
+      if (!isAuthenticated && guestPassword) {
+        let authResult;
+        try {
+          authResult = await login(nickname, guestPassword);
+        } catch (loginErr) {
+          authResult = await register(nickname, guestPassword);
+        }
+
+        onJoinRoom({
+          code,
+          userId: authResult.user.id,
+          nickname: authResult.user.nickname
+        });
+        return;
+      }
+
+      onJoinRoom({
+        code,
+        userId: user?.id || null,
+        nickname
+      });
+    } catch (err) {
+      setError(err.message || 'Erro ao entrar na sala.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const handleCreate = (e) => {
+  const handleCreate = async (e) => {
     e.preventDefault();
     setError('');
     const nickname = isAuthenticated ? user.nickname : guestNickname.trim();
@@ -89,11 +118,35 @@ export default function HomeView({
       return;
     }
 
-    onCreateRoom({
-      name: roomName.trim() || 'Mesa de Rodízio',
-      hostUserId: user?.id || null,
-      hostNickname: nickname
-    });
+    setIsSubmitting(true);
+
+    try {
+      if (!isAuthenticated && guestPassword) {
+        let authResult;
+        try {
+          authResult = await login(nickname, guestPassword);
+        } catch (loginErr) {
+          authResult = await register(nickname, guestPassword);
+        }
+
+        onCreateRoom({
+          name: roomName.trim() || 'Mesa de Rodízio',
+          hostUserId: authResult.user.id,
+          hostNickname: authResult.user.nickname
+        });
+        return;
+      }
+
+      onCreateRoom({
+        name: roomName.trim() || 'Mesa de Rodízio',
+        hostUserId: user?.id || null,
+        hostNickname: nickname
+      });
+    } catch (err) {
+      setError(err.message || 'Erro ao criar a sala.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -131,7 +184,7 @@ export default function HomeView({
                 onClick={() => { setActiveTab('join'); setError(''); }}
                 className={`flex items-center justify-center gap-2 rounded-xl py-2.5 text-xs font-bold transition-all ${
                   activeTab === 'join'
-                    ? 'bg-white text-zinc-900 shadow-sm dark:bg-zinc-800 dark:text-orange-400 dark:border dark:border-zinc-700'
+                    ? 'bg-white text-zinc-900 shadow-xs dark:bg-zinc-800 dark:text-orange-400 dark:border dark:border-zinc-700'
                     : 'text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200'
                 }`}
               >
@@ -143,7 +196,7 @@ export default function HomeView({
                 onClick={() => { setActiveTab('create'); setError(''); }}
                 className={`flex items-center justify-center gap-2 rounded-xl py-2.5 text-xs font-bold transition-all ${
                   activeTab === 'create'
-                    ? 'bg-white text-zinc-900 shadow-sm dark:bg-zinc-800 dark:text-orange-400 dark:border dark:border-zinc-700'
+                    ? 'bg-white text-zinc-900 shadow-xs dark:bg-zinc-800 dark:text-orange-400 dark:border dark:border-zinc-700'
                     : 'text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200'
                 }`}
               >
@@ -171,32 +224,68 @@ export default function HomeView({
                     placeholder="Ex: ROD-A4B2"
                     maxLength={10}
                     required
-                    className="w-full uppercase font-mono tracking-widest text-center text-lg font-bold rounded-2xl border border-zinc-200 bg-zinc-50 py-3.5 text-zinc-900 placeholder:text-zinc-400 focus:border-orange-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/20 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:bg-zinc-950 dark:focus:border-orange-500"
+                    className="w-full uppercase font-mono tracking-widest text-center text-lg font-bold rounded-2xl border border-zinc-200 bg-zinc-50 py-3.5 text-zinc-900 placeholder:text-zinc-400 focus:border-orange-500 focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-orange-500/20 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:bg-zinc-950 dark:focus:border-orange-500"
                   />
                 </div>
 
                 {!isAuthenticated && (
-                  <div>
-                    <label className="block text-xs font-bold uppercase tracking-wider text-zinc-600 dark:text-zinc-400 mb-1.5">
-                      Seu Apelido na Mesa
-                    </label>
-                    <input
-                      type="text"
-                      value={guestNickname}
-                      onChange={(e) => setGuestNickname(e.target.value)}
-                      placeholder="Ex: Matheus"
-                      maxLength={20}
-                      required
-                      className="w-full rounded-2xl border border-zinc-200 bg-zinc-50 py-3 px-4 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-orange-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/20 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:bg-zinc-950 dark:focus:border-orange-500"
-                    />
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-xs font-bold uppercase tracking-wider text-zinc-600 dark:text-zinc-400 mb-1.5">
+                        Seu Apelido na Mesa
+                      </label>
+                      <input
+                        type="text"
+                        value={guestNickname}
+                        onChange={(e) => setGuestNickname(e.target.value)}
+                        placeholder="Ex: Josefina"
+                        maxLength={20}
+                        required
+                        className="w-full rounded-2xl border border-zinc-200 bg-zinc-50 py-3 px-4 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-orange-500 focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-orange-500/20 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:bg-zinc-950 dark:focus:border-orange-500"
+                      />
+                    </div>
+
+                    <div className="p-3 rounded-2xl bg-zinc-50 dark:bg-zinc-950/60 border border-zinc-200 dark:border-zinc-800/80">
+                      <label className="flex items-center gap-2 cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={wantAccount}
+                          onChange={(e) => {
+                            setWantAccount(e.target.checked);
+                            if (!e.target.checked) setGuestPassword('');
+                          }}
+                          className="w-4 h-4 rounded text-orange-600 border-zinc-300 dark:border-zinc-700 focus:ring-orange-500 dark:bg-zinc-900"
+                        />
+                        <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
+                          <Lock className="w-3.5 h-3.5 text-amber-500" />
+                          <span>Salvar no Mural dos Campeões (Criar Senha)</span>
+                        </span>
+                      </label>
+
+                      {wantAccount && (
+                        <div className="mt-2.5 animate-in fade-in duration-150">
+                          <input
+                            type="password"
+                            value={guestPassword}
+                            onChange={(e) => setGuestPassword(e.target.value)}
+                            placeholder="Crie ou digite sua senha"
+                            className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs text-zinc-900 placeholder:text-zinc-400 focus:border-orange-500 focus:outline-hidden focus:ring-2 focus:ring-orange-500/20 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+                          />
+                          <p className="text-[10px] text-zinc-500 dark:text-zinc-400 mt-1">
+                            Sua conta será salva para registrar suas fatias, médias e vitórias para sempre.
+                          </p>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
 
                 <button
                   type="submit"
-                  className="w-full flex items-center justify-center gap-2 rounded-2xl bg-orange-600 py-4 text-sm font-bold text-white shadow-lg shadow-orange-600/30 hover:bg-orange-500 transition-all focus:outline-none focus:ring-2 focus:ring-orange-500/50"
+                  disabled={isSubmitting}
+                  className="w-full flex items-center justify-center gap-2 rounded-2xl bg-orange-600 py-4 text-sm font-bold text-white shadow-lg shadow-orange-600/30 hover:bg-orange-500 transition-all focus:outline-hidden focus:ring-2 focus:ring-orange-500/50 disabled:opacity-50"
                 >
-                  <span>Entrar na Batalha</span>
+                  <span>{isSubmitting ? 'Entrando...' : 'Entrar na Batalha'}</span>
                   <ArrowRight className="h-4 w-4" />
                 </button>
               </form>
@@ -212,24 +301,56 @@ export default function HomeView({
                     onChange={(e) => setRoomName(e.target.value)}
                     placeholder="Ex: Rodízio na Bella Pizza"
                     maxLength={40}
-                    className="w-full rounded-2xl border border-zinc-200 bg-zinc-50 py-3 px-4 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-orange-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/20 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:bg-zinc-950 dark:focus:border-orange-500"
+                    className="w-full rounded-2xl border border-zinc-200 bg-zinc-50 py-3 px-4 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-orange-500 focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-orange-500/20 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:bg-zinc-950 dark:focus:border-orange-500"
                   />
                 </div>
 
                 {!isAuthenticated && (
-                  <div>
-                    <label className="block text-xs font-bold uppercase tracking-wider text-zinc-600 dark:text-zinc-400 mb-1.5">
-                      Seu Apelido (Anfitrião da Sala)
-                    </label>
-                    <input
-                      type="text"
-                      value={guestNickname}
-                      onChange={(e) => setGuestNickname(e.target.value)}
-                      placeholder="Ex: Carlos"
-                      maxLength={20}
-                      required
-                      className="w-full rounded-2xl border border-zinc-200 bg-zinc-50 py-3 px-4 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-orange-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/20 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:bg-zinc-950 dark:focus:border-orange-500"
-                    />
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-xs font-bold uppercase tracking-wider text-zinc-600 dark:text-zinc-400 mb-1.5">
+                        Seu Apelido (Anfitrião da Sala)
+                      </label>
+                      <input
+                        type="text"
+                        value={guestNickname}
+                        onChange={(e) => setGuestNickname(e.target.value)}
+                        placeholder="Ex: Carlos"
+                        maxLength={20}
+                        required
+                        className="w-full rounded-2xl border border-zinc-200 bg-zinc-50 py-3 px-4 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-orange-500 focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-orange-500/20 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:bg-zinc-950 dark:focus:border-orange-500"
+                      />
+                    </div>
+
+                    <div className="p-3 rounded-2xl bg-zinc-50 dark:bg-zinc-950/60 border border-zinc-200 dark:border-zinc-800/80">
+                      <label className="flex items-center gap-2 cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={wantAccount}
+                          onChange={(e) => {
+                            setWantAccount(e.target.checked);
+                            if (!e.target.checked) setGuestPassword('');
+                          }}
+                          className="w-4 h-4 rounded text-orange-600 border-zinc-300 dark:border-zinc-700 focus:ring-orange-500 dark:bg-zinc-900"
+                        />
+                        <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
+                          <Lock className="w-3.5 h-3.5 text-amber-500" />
+                          <span>Salvar no Mural dos Campeões (Criar Senha)</span>
+                        </span>
+                      </label>
+
+                      {wantAccount && (
+                        <div className="mt-2.5 animate-in fade-in duration-150">
+                          <input
+                            type="password"
+                            value={guestPassword}
+                            onChange={(e) => setGuestPassword(e.target.value)}
+                            placeholder="Crie ou digite sua senha"
+                            className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs text-zinc-900 placeholder:text-zinc-400 focus:border-orange-500 focus:outline-hidden focus:ring-2 focus:ring-orange-500/20 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+                          />
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
 
@@ -239,10 +360,11 @@ export default function HomeView({
 
                 <button
                   type="submit"
-                  className="w-full flex items-center justify-center gap-2 rounded-2xl bg-orange-600 py-4 text-sm font-bold text-white shadow-lg shadow-orange-600/30 hover:bg-orange-500 transition-all focus:outline-none focus:ring-2 focus:ring-orange-500/50"
+                  disabled={isSubmitting}
+                  className="w-full flex items-center justify-center gap-2 rounded-2xl bg-orange-600 py-4 text-sm font-bold text-white shadow-lg shadow-orange-600/30 hover:bg-orange-500 transition-all focus:outline-hidden focus:ring-2 focus:ring-orange-500/50 disabled:opacity-50"
                 >
                   <PlusCircle className="h-4 w-4" />
-                  <span>Criar Sala e Gerar Código</span>
+                  <span>{isSubmitting ? 'Criando...' : 'Criar Sala e Gerar Código'}</span>
                 </button>
               </form>
             )}
@@ -345,65 +467,81 @@ export default function HomeView({
                   </span>
                 </div>
               </div>
+
+              {/* View / Edit Profile Button */}
+              <button
+                type="button"
+                onClick={onOpenProfile}
+                className="mt-4 w-full flex items-center justify-center gap-2 rounded-2xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/80 py-2.5 text-xs font-bold text-zinc-800 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-all shadow-2xs"
+              >
+                <User className="h-3.5 w-3.5 text-amber-500" />
+                <span>Ver / Alterar Meu Apelido</span>
+              </button>
             </div>
           ) : (
             <div className="rounded-3xl border border-orange-500/20 bg-gradient-to-br from-orange-500/10 via-amber-500/5 to-transparent p-6 shadow-xl dark:border-orange-500/20 dark:bg-zinc-900">
-              <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-2xl bg-orange-600 text-white shadow-md">
-                <BarChart3 className="h-5 w-5" />
+              <div className="flex items-center gap-2.5 text-orange-600 dark:text-orange-400 font-bold mb-2">
+                <Sparkles className="h-5 w-5" />
+                <h3 className="text-base font-black">Crie Sua Conta de Guerreiro</h3>
               </div>
-              <h3 className="text-lg font-bold text-zinc-900 dark:text-white">
-                Guarde suas Estatísticas
-              </h3>
-              <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
-                Cadastre um apelido e senha para registrar suas fatias em todos os rodízios, acompanhar sua média e subir de patente.
+              <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed mb-4">
+                Cadastre-se para calcular sua média de fatias por rodízio, salvar suas vitórias e disputar o Mural dos Campeões com seus amigos!
               </p>
               <button
                 onClick={onOpenAuth}
-                className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-orange-600 py-3 text-xs font-bold text-white hover:bg-orange-500 transition-all shadow-md shadow-orange-600/20"
+                className="w-full rounded-2xl bg-orange-600 py-3 text-xs font-bold text-white shadow-md shadow-orange-600/30 hover:bg-orange-500 transition-all"
               >
-                <span>Criar Conta em 10 Segundos</span>
-                <ChevronRight className="h-4 w-4" />
+                Entrar ou Criar Conta
               </button>
             </div>
           )}
 
+          {/* Leaderboard */}
           <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-xl dark:border-zinc-800 dark:bg-zinc-900 transition-all">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-sm font-bold uppercase tracking-wider text-zinc-900 dark:text-white flex items-center gap-2">
-                <Crown className="h-4 w-4 text-amber-500" />
+                <Trophy className="h-4 w-4 text-amber-500" />
                 <span>Mural dos Campeões</span>
               </h3>
+              <span className="text-[11px] text-zinc-400 font-medium">Contas Verificadas</span>
             </div>
 
-            {leaderboard.topWins.length === 0 ? (
-              <p className="text-xs text-zinc-500 dark:text-zinc-400 py-2">
-                Nenhuma batalha registrada no ranking global ainda. Seja o primeiro a vencer!
-              </p>
-            ) : (
+            {leaderboard.topWins && leaderboard.topWins.length > 0 ? (
               <div className="space-y-2.5">
-                {leaderboard.topWins.slice(0, 5).map((player, idx) => (
-                  <div
+                {leaderboard.topWins.map((champ, idx) => (
+                  <div 
                     key={idx}
-                    className="flex items-center justify-between rounded-xl bg-zinc-50 px-3 py-2.5 dark:bg-zinc-800/50"
+                    className="flex items-center justify-between p-2.5 rounded-2xl bg-zinc-50 dark:bg-zinc-950/50 border border-zinc-100 dark:border-zinc-800/80"
                   >
                     <div className="flex items-center gap-2.5">
-                      <span className="font-mono text-xs font-bold text-zinc-400 w-4">
+                      <span className={`w-6 text-center font-mono font-black text-xs ${
+                        idx === 0 ? 'text-amber-500' : idx === 1 ? 'text-zinc-400' : idx === 2 ? 'text-amber-700' : 'text-zinc-500'
+                      }`}>
                         #{idx + 1}
                       </span>
-                      <span className="text-xs font-bold text-zinc-900 dark:text-white">
-                        {player.nickname}
-                      </span>
+                      <div>
+                        <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100 block leading-tight">
+                          {champ.nickname}
+                        </span>
+                        <span className="text-[10px] text-zinc-400">
+                          Média: {champ.avg_slices} fatias
+                        </span>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-3 text-right">
-                      <span className="text-xs font-bold text-amber-500">
-                        {player.wins} {player.wins === 1 ? 'vitória' : 'vitórias'}
+                    <div className="text-right">
+                      <span className="font-mono text-xs font-black text-amber-500 block">
+                        {champ.wins} {champ.wins === 1 ? 'vitória' : 'vitórias'}
                       </span>
-                      <span className="text-[11px] text-zinc-400">
-                        (Média: {player.avg_slices})
+                      <span className="text-[10px] text-zinc-400">
+                        {champ.total_slices} fatias total
                       </span>
                     </div>
                   </div>
                 ))}
+              </div>
+            ) : (
+              <div className="text-center py-6 text-xs text-zinc-400">
+                Nenhum campeão registrado ainda. Crie uma sala e termine o primeiro rodízio!
               </div>
             )}
           </div>

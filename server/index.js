@@ -64,14 +64,14 @@ io.on('connection', (socket) => {
   });
 
   // Join Room
-  socket.on('room:join', ({ code, userId, nickname }, callback) => {
+  socket.on('room:join', async ({ code, userId, nickname }, callback) => {
     try {
       if (!code || !nickname) {
         if (typeof callback === 'function') callback({ success: false, error: 'Código e apelido são obrigatórios.' });
         return;
       }
 
-      const result = roomsManager.joinRoom({
+      const result = await roomsManager.joinRoom({
         code,
         socketId: socket.id,
         userId: userId || null,

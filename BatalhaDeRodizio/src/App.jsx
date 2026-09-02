@@ -4,6 +4,7 @@ import { useAuth } from './context/AuthContext';
 import Navbar from './components/Navbar';
 import AuthModal from './components/AuthModal';
 import PodiumModal from './components/PodiumModal';
+import ProfileModal from './components/ProfileModal';
 import HomeView from './views/HomeView';
 import RoomView from './views/RoomView';
 import { AlertCircle } from 'lucide-react';
@@ -14,6 +15,7 @@ export default function App() {
   const [socketId, setSocketId] = useState(null);
   const [isConnected, setIsConnected] = useState(socket.connected);
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const [showProfileModal, setShowProfileModal] = useState(false);
   const [showPodium, setShowPodium] = useState(false);
   const [initialCode, setInitialCode] = useState('');
 
@@ -136,10 +138,11 @@ export default function App() {
       {/* Navigation Header */}
       <Navbar
         onOpenAuth={() => setShowAuthModal(true)}
+        onOpenProfile={() => setShowProfileModal(true)}
         onNavigateHome={() => {
           if (currentRoom) {
-            if (window.confirm('Deseja voltar ao menu inicial?')) {
-              setCurrentRoom(null);
+            if (window.confirm('Deseja realmente sair da sala atual e voltar ao início?')) {
+              handleLeaveRoom();
               setShowPodium(false);
             }
           }
@@ -169,6 +172,7 @@ export default function App() {
             onCreateRoom={handleCreateRoom}
             onJoinRoom={handleJoinRoom}
             onOpenAuth={() => setShowAuthModal(true)}
+            onOpenProfile={() => setShowProfileModal(true)}
             initialCode={initialCode}
           />
         )}
@@ -188,6 +192,12 @@ export default function App() {
       <AuthModal
         isOpen={showAuthModal}
         onClose={() => setShowAuthModal(false)}
+      />
+
+      {/* Profile Modal */}
+      <ProfileModal
+        isOpen={showProfileModal}
+        onClose={() => setShowProfileModal(false)}
       />
 
       {/* Podium Modal */}

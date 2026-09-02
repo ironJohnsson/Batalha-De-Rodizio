@@ -3,6 +3,23 @@ const router = express.Router();
 const { db } = require('../db');
 const { hashPassword, comparePassword, generateToken, authMiddleware } = require('../auth');
 
+// GET /api/auth/check-nickname/:nickname
+router.get('/check-nickname/:nickname', async (req, res) => {
+  try {
+    const nick = (req.params.nickname || '').trim();
+    if (!nick) return res.json({ exists: false });
+
+    const existing = await db.execute({
+      sql: 'SELECT id FROM users WHERE nickname = ? COLLATE NOCASE',
+      args: [nick]
+    });
+    return res.json({ exists: existing.rows.length > 0 });
+  } catch (err) {
+    console.error('Erro ao verificar apelido:', err);
+    return res.status(500).json({ error: 'Erro ao verificar apelido.' });
+  }
+});
+
 // POST /api/auth/register
 router.post('/register', async (req, res) => {
   const { nickname, password } = req.body;
@@ -33,42 +50,10 @@ router.post('/register', async (req, res) => {
     });
     const userId = Number(insertUser.lastInsertRowid);
 
-    // Check if this nickname has past games or wins played before registering
-    const pastStatsRes = await db.execute({
-      sql: `SELECT 
-        COUNT(*) as total_battles,
-        COALESCE(SUM(slice_count), 0) as total_slices,
-        COALESCE(MAX(slice_count), 0) as max_slices
-      FROM room_participants
-      WHERE nickname = ? COLLATE NOCASE`,
-      args: [cleanNickname]
-    });
-    const pastStats = pastStatsRes.rows[0] || {};
-
-    const pastWinsRes = await db.execute({
-      sql: `SELECT COUNT(*) as wins
-      FROM rooms
-      WHERE winner_nickname = ? COLLATE NOCASE AND status = 'finished'`,
-      args: [cleanNickname]
-    });
-    const pastWins = pastWinsRes.rows[0] || {};
-
-    const totalBattles = Number(pastStats.total_battles) || 0;
-    const wins = Number(pastWins.wins) || 0;
-    const totalSlices = Number(pastStats.total_slices) || 0;
-    const maxSlices = Number(pastStats.max_slices) || 0;
-    const avgSlices = totalBattles > 0 ? Number((totalSlices / totalBattles).toFixed(1)) : 0.0;
-
-    // Link past room records to this newly registered user_id
+    // Initialize clean stats for the new verified account
     await db.execute({
-      sql: 'UPDATE room_participants SET user_id = ? WHERE nickname = ? COLLATE NOCASE',
-      args: [userId, cleanNickname]
-    });
-
-    // Initialize stats with past achievements included!
-    await db.execute({
-      sql: 'INSERT INTO user_stats (user_id, total_battles, wins, total_slices, max_slices, avg_slices) VALUES (?, ?, ?, ?, ?, ?)',
-      args: [userId, totalBattles, wins, totalSlices, maxSlices, avgSlices]
+      sql: 'INSERT INTO user_stats (user_id, total_battles, wins, total_slices, max_slices, avg_slices) VALUES (?, 0, 0, 0, 0, 0.0)',
+      args: [userId]
     });
 
     const user = { id: userId, nickname: cleanNickname };
@@ -79,11 +64,11 @@ router.post('/register', async (req, res) => {
       token,
       user,
       stats: {
-        total_battles: totalBattles,
-        wins,
-        total_slices: totalSlices,
-        max_slices: maxSlices,
-        avg_slices: avgSlices
+        total_battles: 0,
+        wins: 0,
+        total_slices: 0,
+        max_slices: 0,
+        avg_slices: 0.0
       }
     });
   } catch (err) {
@@ -189,6 +174,68 @@ router.get('/me', authMiddleware, async (req, res) => {
   } catch (err) {
     console.error('Erro em /me:', err);
     return res.status(500).json({ error: 'Erro ao obter dados do usuário.' });
+  }
+});
+
+// PUT /api/auth/update-nickname
+router.put('/update-nickname', authMiddleware, async (req, res) => {
+  const { newNickname } = req.body;
+
+  if (!newNickname || typeof newNickname !== 'string' || newNickname.trim().length < 2) {
+    return res.status(400).json({ error: 'O novo apelido deve ter pelo menos 2 caracteres.' });
+  }
+
+  const clean = newNickname.trim();
+
+  try {
+    // Check if newNickname is already taken by someone else
+    const existing = await db.execute({
+      sql: 'SELECT id FROM users WHERE nickname = ? COLLATE NOCASE AND id != ?',
+      args: [clean, req.user.id]
+    });
+
+    if (existing.rows.length > 0) {
+      return res.status(409).json({ error: 'Este apelido já está em uso por outro guerreiro de mesa.' });
+    }
+
+    // Get current nickname
+    const currUser = await db.execute({
+      sql: 'SELECT nickname FROM users WHERE id = ?',
+      args: [req.user.id]
+    });
+    const oldNickname = currUser.rows[0]?.nickname;
+
+    // Update users table
+    await db.execute({
+      sql: 'UPDATE users SET nickname = ? WHERE id = ?',
+      args: [clean, req.user.id]
+    });
+
+    // Update room_participants table for this user
+    await db.execute({
+      sql: 'UPDATE room_participants SET nickname = ? WHERE user_id = ?',
+      args: [clean, req.user.id]
+    });
+
+    // If user was recorded as winner in past rooms, update winner_nickname
+    if (oldNickname) {
+      await db.execute({
+        sql: 'UPDATE rooms SET winner_nickname = ? WHERE winner_nickname = ? COLLATE NOCASE',
+        args: [clean, oldNickname]
+      });
+    }
+
+    const updatedUser = { id: req.user.id, nickname: clean };
+    const token = generateToken(updatedUser);
+
+    return res.json({
+      message: 'Apelido atualizado com sucesso!',
+      user: updatedUser,
+      token
+    });
+  } catch (err) {
+    console.error('Erro ao atualizar apelido:', err);
+    return res.status(500).json({ error: 'Erro ao atualizar apelido.' });
   }
 });
 

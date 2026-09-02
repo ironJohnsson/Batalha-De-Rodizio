@@ -65,7 +65,7 @@ async function createRoom({ name, hostUserId, hostNickname, hostSocketId }) {
   return formatRoomPayload(roomData);
 }
 
-function joinRoom({ code, socketId, userId, nickname }) {
+async function joinRoom({ code, socketId, userId, nickname }) {
   const formattedCode = code.toUpperCase().trim();
   const room = activeRooms.get(formattedCode);
 
@@ -77,10 +77,29 @@ function joinRoom({ code, socketId, userId, nickname }) {
     return { error: 'Esta competição já foi finalizada.' };
   }
 
-  // Check if participant with same nickname exists in this room
+  const cleanNickname = nickname.trim();
+
+  // ANTI-IMPERSONATION: If user is not authenticated, verify nickname is not registered to an existing account
+  if (!userId) {
+    try {
+      const existingUser = await db.execute({
+        sql: 'SELECT id FROM users WHERE nickname = ? COLLATE NOCASE',
+        args: [cleanNickname]
+      });
+      if (existingUser.rows.length > 0) {
+        return {
+          error: `O apelido "${cleanNickname}" pertence a uma conta registrada. Faça login com sua senha para jogar com ele, ou escolha outro apelido como visitante.`
+        };
+      }
+    } catch (err) {
+      console.error('Erro ao validar nickname em joinRoom:', err);
+    }
+  }
+
+  // Check if participant with same nickname exists in this room (reconnection)
   let existingEntry = null;
   for (const [sId, p] of room.participants.entries()) {
-    if ((userId && p.userId === userId) || p.nickname.toLowerCase() === nickname.toLowerCase()) {
+    if ((userId && p.userId === userId) || p.nickname.toLowerCase() === cleanNickname.toLowerCase()) {
       existingEntry = { oldSocketId: sId, participant: p };
       break;
     }
@@ -91,7 +110,7 @@ function joinRoom({ code, socketId, userId, nickname }) {
     room.participants.set(socketId, {
       ...existingEntry.participant,
       socketId,
-      nickname: nickname || existingEntry.participant.nickname,
+      nickname: cleanNickname,
       userId: userId || existingEntry.participant.userId
     });
 
@@ -102,14 +121,14 @@ function joinRoom({ code, socketId, userId, nickname }) {
     room.participants.set(socketId, {
       socketId,
       userId: userId || null,
-      nickname: nickname.trim(),
+      nickname: cleanNickname,
       slices: 0,
       joinedAt: new Date().toISOString()
     });
 
     room.logs.unshift({
       id: Date.now(),
-      text: `${nickname} entrou na mesa!`,
+      text: `${cleanNickname} entrou na mesa!`,
       type: 'join',
       time: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
     });
@@ -190,7 +209,7 @@ async function finishRoom({ code, socketId, requesterUserId }) {
     time: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
   });
 
-  // Persist final data to SQLite / Turso & update user stats
+  // Persist final data to SQLite / Turso & update user stats ONLY for authenticated accounts
   try {
     await db.execute({
       sql: `UPDATE rooms SET status = 'finished', winner_nickname = ?, finished_at = CURRENT_TIMESTAMP WHERE code = ?`,
@@ -198,24 +217,14 @@ async function finishRoom({ code, socketId, requesterUserId }) {
     });
 
     for (const p of participantsList) {
-      let targetUserId = p.userId;
-      if (!targetUserId) {
-        const userRec = await db.execute({
-          sql: 'SELECT id FROM users WHERE nickname = ? COLLATE NOCASE',
-          args: [p.nickname]
-        });
-        if (userRec.rows.length > 0) {
-          targetUserId = userRec.rows[0].id;
-        }
-      }
-
       await db.execute({
         sql: `INSERT INTO room_participants (room_code, user_id, nickname, slice_count) VALUES (?, ?, ?, ?)`,
-        args: [code, targetUserId || null, p.nickname, p.slices]
+        args: [code, p.userId || null, p.nickname, p.slices]
       });
 
-      if (targetUserId) {
-        const isWinner = topScorers.some(winner => winner.nickname.toLowerCase() === p.nickname.toLowerCase()) ? 1 : 0;
+      // STRICT INTEGRITY: Only update lifetime stats if participant is logged into their verified account
+      if (p.userId) {
+        const isWinner = topScorers.some(winner => winner.userId === p.userId) ? 1 : 0;
         await db.execute({
           sql: `INSERT INTO user_stats (user_id, total_battles, wins, total_slices, max_slices, avg_slices)
           VALUES (?, 1, ?, ?, ?, ?)
@@ -225,7 +234,7 @@ async function finishRoom({ code, socketId, requesterUserId }) {
             total_slices = total_slices + excluded.total_slices,
             max_slices = MAX(max_slices, excluded.max_slices),
             avg_slices = ROUND(CAST(total_slices + excluded.total_slices AS REAL) / (total_battles + 1), 1)`,
-          args: [targetUserId, isWinner, p.slices, p.slices, p.slices]
+          args: [p.userId, isWinner, p.slices, p.slices, p.slices]
         });
       }
     }

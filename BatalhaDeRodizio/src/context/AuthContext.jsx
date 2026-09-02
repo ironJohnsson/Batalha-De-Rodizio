@@ -71,6 +71,21 @@ export function AuthProvider({ children }) {
     }
   };
 
+  const updateNickname = async (newNickname) => {
+    const data = await apiRequest('/auth/update-nickname', {
+      method: 'PUT',
+      body: JSON.stringify({ newNickname })
+    });
+    if (data.token) {
+      localStorage.setItem('contarodizio_token', data.token);
+      setToken(data.token);
+    }
+    if (data.user) {
+      setUser(data.user);
+    }
+    return data;
+  };
+
   return (
     <AuthContext.Provider value={{
       user,
@@ -81,6 +96,7 @@ export function AuthProvider({ children }) {
       register,
       logout,
       refreshProfile,
+      updateNickname,
       isAuthenticated: !!user
     }}>
       {children}

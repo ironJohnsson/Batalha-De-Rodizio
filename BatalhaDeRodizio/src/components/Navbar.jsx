@@ -3,7 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { Moon, Sun, LogIn, LogOut, Utensils, Award } from 'lucide-react';
 
-export default function Navbar({ onOpenAuth, onNavigateHome }) {
+export default function Navbar({ onOpenAuth, onNavigateHome, onOpenProfile }) {
   const { user, stats, logout, isAuthenticated } = useAuth();
   const { isDark, toggleTheme } = useTheme();
 
@@ -47,19 +47,28 @@ export default function Navbar({ onOpenAuth, onNavigateHome }) {
           {/* User Account / Auth */}
           {isAuthenticated ? (
             <div className="flex items-center gap-2">
-              <div className="hidden sm:flex flex-col items-end">
-                <span className="text-xs font-semibold text-zinc-900 dark:text-zinc-100">
-                  {user.nickname}
-                </span>
-                <span className="text-[10px] font-medium text-orange-500 flex items-center gap-1">
-                  <Award className="h-3 w-3" />
-                  {stats?.title || 'Participante'}
-                </span>
-              </div>
+              <button
+                onClick={onOpenProfile}
+                title="Ver e editar meu perfil"
+                className="flex items-center gap-2 rounded-xl border border-zinc-200 bg-zinc-50 px-2.5 py-1.5 hover:bg-zinc-100 hover:border-amber-400/50 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:bg-zinc-800/80 transition-all text-left"
+              >
+                <div className="w-7 h-7 rounded-lg bg-gradient-to-tr from-amber-500 to-orange-500 flex items-center justify-center text-white font-black text-xs shadow-xs shrink-0">
+                  {user.nickname.charAt(0).toUpperCase()}
+                </div>
+                <div className="hidden sm:flex flex-col">
+                  <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100 leading-tight">
+                    {user.nickname}
+                  </span>
+                  <span className="text-[10px] font-medium text-amber-500 dark:text-amber-400 flex items-center gap-0.5">
+                    <Award className="h-2.5 w-2.5 shrink-0" />
+                    {stats?.title || 'Participante'}
+                  </span>
+                </div>
+              </button>
               <button
                 onClick={logout}
                 title="Sair da Conta"
-                className="flex items-center gap-1.5 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs font-semibold text-zinc-600 hover:bg-red-50 hover:border-red-200 hover:text-red-600 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-red-950/40 dark:hover:border-red-900/50 dark:hover:text-red-400 transition-all"
+                className="flex items-center gap-1.5 rounded-xl border border-zinc-200 bg-zinc-50 p-2 sm:px-3 text-xs font-semibold text-zinc-600 hover:bg-red-50 hover:border-red-200 hover:text-red-600 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-red-950/40 dark:hover:border-red-900/50 dark:hover:text-red-400 transition-all"
               >
                 <LogOut className="h-4 w-4" />
                 <span className="hidden sm:inline">Sair</span>
