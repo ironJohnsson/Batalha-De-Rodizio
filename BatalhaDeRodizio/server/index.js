@@ -58,6 +58,7 @@ io.on('connection', (socket) => {
 
   // Create Room
   socket.on('room:create', async ({ name, hostUserId, hostNickname, password }, callback) => {
+    try {
       const room = await roomsManager.createRoom({
         name,
         hostUserId,
@@ -69,6 +70,7 @@ io.on('connection', (socket) => {
       console.log(`[Sala Criada] Código: ${room.code} por ${hostNickname}`);
       io.emit('rooms:updated_list', roomsManager.listActiveRooms());
       if (typeof callback === 'function') callback({ success: true, room });
+    } catch (err) {
       console.error('Erro ao criar sala:', err);
       if (typeof callback === 'function') callback({ success: false, error: 'Não foi possível criar a sala.' });
     }
