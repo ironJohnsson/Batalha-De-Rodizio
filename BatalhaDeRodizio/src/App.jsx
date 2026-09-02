@@ -67,13 +67,13 @@ export default function App() {
     };
   }, [refreshProfile]);
 
-  const handleCreateRoom = ({ name, hostUserId, hostNickname, type, password }) => {
+  const handleCreateRoom = ({ name, hostUserId, hostNickname, password }) => {
     if (!socket.connected) {
       alert('Não foi possível conectar ao servidor. Verifique sua conexão com a internet.');
       return;
     }
 
-    socket.emit('room:create', { name, hostUserId, hostNickname, type, password }, (response) => {
+    socket.emit('room:create', { name, hostUserId, hostNickname, password }, (response) => {
       if (response && response.success) {
         setCurrentRoom(response.room);
       } else {

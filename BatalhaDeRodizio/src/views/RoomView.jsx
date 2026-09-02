@@ -78,18 +78,6 @@ export default function RoomView({
               <span className="font-mono text-sm font-black text-orange-600 dark:text-orange-400">
                 {room.code}
               </span>
-              {room.type && (
-                <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300">
-                  {room.type.toLowerCase() === 'churrasco' ? (
-                    <Flame className="w-3 h-3 text-red-500" />
-                  ) : room.type.toLowerCase() === 'pizza' ? (
-                    <Utensils className="w-3 h-3 text-amber-500" />
-                  ) : (
-                    <Sparkles className="w-3 h-3 text-purple-500" />
-                  )}
-                  <span className="capitalize">{room.type}</span>
-                </span>
-              )}
               {room.hasPassword && (
                 <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full border border-amber-300/60 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-400">
                   <Lock className="w-3 h-3" />

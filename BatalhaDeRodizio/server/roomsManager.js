@@ -12,22 +12,18 @@ function generateRoomCode() {
   return code;
 }
 
-async function createRoom({ name, hostUserId, hostNickname, hostSocketId, type, password }) {
+async function createRoom({ name, hostUserId, hostNickname, hostSocketId, password }) {
   let code = generateRoomCode();
   while (activeRooms.has(code)) {
     code = generateRoomCode();
   }
 
   const roomName = name && name.trim() ? name.trim() : `Mesa ${code}`;
-  const roomType = type && ['churrasco', 'pizza', 'outro'].includes(type.toLowerCase()) 
-    ? type.toLowerCase() 
-    : (type || 'pizza');
   const roomPass = password && password.trim() ? password.trim() : null;
 
   const roomData = {
     code,
     name: roomName,
-    type: roomType,
     password: roomPass,
     hostSocketId,
     hostUserId: hostUserId || null,
@@ -60,9 +56,9 @@ async function createRoom({ name, hostUserId, hostNickname, hostSocketId, type, 
   // Save room stub to DB
   try {
     await db.execute({
-      sql: `INSERT INTO rooms (code, name, host_user_id, type, password, status, created_at)
-      VALUES (?, ?, ?, ?, ?, 'active', CURRENT_TIMESTAMP)`,
-      args: [code, roomName, hostUserId || null, roomType, roomPass]
+      sql: `INSERT INTO rooms (code, name, host_user_id, password, status, created_at)
+      VALUES (?, ?, ?, ?, 'active', CURRENT_TIMESTAMP)`,
+      args: [code, roomName, hostUserId || null, roomPass]
     });
   } catch (err) {
     console.error('Erro ao salvar sala no banco:', err.message);
@@ -78,7 +74,6 @@ function listActiveRooms() {
       code: room.code,
       name: room.name,
       hostNickname: room.hostNickname,
-      type: room.type || 'pizza',
       hasPassword: Boolean(room.password),
       participantsCount: room.participants.size,
       createdAt: room.createdAt
@@ -309,7 +304,6 @@ function formatRoomPayload(room) {
   return {
     code: room.code,
     name: room.name,
-    type: room.type || 'pizza',
     hasPassword: Boolean(room.password),
     hostSocketId: room.hostSocketId,
     hostUserId: room.hostUserId,

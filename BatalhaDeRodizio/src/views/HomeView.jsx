@@ -46,8 +46,6 @@ export default function HomeView({
 
   // Create Room states
   const [roomName, setRoomName] = useState('');
-  const [rodizioType, setRodizioType] = useState('pizza'); // 'pizza' | 'churrasco' | 'outro'
-  const [customType, setCustomType] = useState('');
   const [enableRoomPassword, setEnableRoomPassword] = useState(false);
   const [newRoomPassword, setNewRoomPassword] = useState('');
   const [showNewRoomPassword, setShowNewRoomPassword] = useState(false);
@@ -212,15 +210,10 @@ export default function HomeView({
         finalNickname = authResult.user.nickname;
       }
 
-      const finalType = rodizioType === 'outro' && customType.trim() 
-        ? customType.trim() 
-        : rodizioType;
-
       onCreateRoom({
-        name: roomName.trim() || `Mesa de Rodízio de ${finalType.charAt(0).toUpperCase() + finalType.slice(1)}`,
+        name: roomName.trim() || 'Mesa de Rodízio',
         hostUserId: finalUserId,
         hostNickname: finalNickname,
-        type: finalType,
         password: enableRoomPassword ? newRoomPassword.trim() : null
       });
     } catch (err) {
@@ -234,8 +227,7 @@ export default function HomeView({
 
   const filteredRooms = activeRooms.filter(r => 
     r.name.toLowerCase().includes(roomFilter.toLowerCase()) ||
-    r.code.toLowerCase().includes(roomFilter.toLowerCase()) ||
-    r.type.toLowerCase().includes(roomFilter.toLowerCase())
+    r.code.toLowerCase().includes(roomFilter.toLowerCase())
   );
 
   return (
@@ -442,7 +434,7 @@ export default function HomeView({
                       type="text"
                       value={roomFilter}
                       onChange={(e) => setRoomFilter(e.target.value)}
-                      placeholder="Filtrar por nome, código ou tipo..."
+                      placeholder="Filtrar por nome ou código..."
                       className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 text-xs text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 focus:outline-hidden focus:border-orange-500"
                     />
                   </div>
@@ -479,8 +471,6 @@ export default function HomeView({
                   <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
                     {filteredRooms.map((room) => {
                       const isSelected = selectedRoomToJoin?.code === room.code;
-                      const isPizza = (room.type || '').toLowerCase() === 'pizza';
-                      const isChurrasco = (room.type || '').toLowerCase() === 'churrasco';
 
                       return (
                         <div
@@ -506,20 +496,8 @@ export default function HomeView({
                                 Anfitrião: <strong className="text-zinc-700 dark:text-zinc-300">{room.hostNickname}</strong>
                               </p>
 
-                              {/* Badges: Tipo de Rodízio, Senha, Participantes */}
+                              {/* Badges: Senha e Participantes */}
                               <div className="flex items-center gap-2 mt-2.5 flex-wrap">
-                                {/* Tipo de Rodízio */}
-                                <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300">
-                                  {isChurrasco ? (
-                                    <Flame className="w-3 h-3 text-red-500" />
-                                  ) : isPizza ? (
-                                    <Utensils className="w-3 h-3 text-amber-500" />
-                                  ) : (
-                                    <Sparkles className="w-3 h-3 text-purple-500" />
-                                  )}
-                                  <span className="capitalize">{room.type || 'Pizza'}</span>
-                                </span>
-
                                 {/* Cadeado / Protegida */}
                                 {room.hasPassword ? (
                                   <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full border border-amber-300/60 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-400">
@@ -634,70 +612,10 @@ export default function HomeView({
                     type="text"
                     value={roomName}
                     onChange={(e) => setRoomName(e.target.value)}
-                    placeholder="Ex: Rodízio dos Campeões na Bella Pizza"
+                    placeholder="Ex: Rodízio na Bella Pizza"
                     maxLength={40}
                     className="w-full rounded-2xl border border-zinc-200 bg-zinc-50 py-3 px-4 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-orange-500 focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-orange-500/20 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:bg-zinc-950 dark:focus:border-orange-500"
                   />
-                </div>
-
-                {/* Tipo de Rodízio: Pizza | Churrasco | Outro */}
-                <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-zinc-600 dark:text-zinc-400 mb-1.5">
-                    Tipo de Rodízio
-                  </label>
-                  <div className="grid grid-cols-3 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setRodizioType('pizza')}
-                      className={`flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
-                        rodizioType === 'pizza'
-                          ? 'border-orange-500 bg-orange-50 text-orange-700 dark:bg-orange-950/40 dark:border-orange-500 dark:text-orange-400 ring-2 ring-orange-500/20'
-                          : 'border-zinc-200 bg-zinc-50 text-zinc-700 hover:bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-300 dark:hover:bg-zinc-800'
-                      }`}
-                    >
-                      <Utensils className="w-3.5 h-3.5 text-amber-500" />
-                      <span>Pizza</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setRodizioType('churrasco')}
-                      className={`flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
-                        rodizioType === 'churrasco'
-                          ? 'border-orange-500 bg-orange-50 text-orange-700 dark:bg-orange-950/40 dark:border-orange-500 dark:text-orange-400 ring-2 ring-orange-500/20'
-                          : 'border-zinc-200 bg-zinc-50 text-zinc-700 hover:bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-300 dark:hover:bg-zinc-800'
-                      }`}
-                    >
-                      <Flame className="w-3.5 h-3.5 text-red-500" />
-                      <span>Churrasco</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setRodizioType('outro')}
-                      className={`flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
-                        rodizioType === 'outro'
-                          ? 'border-orange-500 bg-orange-50 text-orange-700 dark:bg-orange-950/40 dark:border-orange-500 dark:text-orange-400 ring-2 ring-orange-500/20'
-                          : 'border-zinc-200 bg-zinc-50 text-zinc-700 hover:bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-300 dark:hover:bg-zinc-800'
-                      }`}
-                    >
-                      <Sparkles className="w-3.5 h-3.5 text-purple-500" />
-                      <span>Outro</span>
-                    </button>
-                  </div>
-
-                  {rodizioType === 'outro' && (
-                    <div className="mt-2 animate-in fade-in duration-150">
-                      <input
-                        type="text"
-                        value={customType}
-                        onChange={(e) => setCustomType(e.target.value)}
-                        placeholder="Ex: Sushi / Japonês, Pastel, Hambúrguer..."
-                        maxLength={25}
-                        className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs text-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 focus:border-orange-500 focus:outline-hidden"
-                      />
-                    </div>
-                  )}
                 </div>
 
                 {/* Senha da Sala (Opcional) */}
