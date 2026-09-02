@@ -7,7 +7,7 @@ import PodiumModal from './components/PodiumModal';
 import ProfileModal from './components/ProfileModal';
 import HomeView from './views/HomeView';
 import RoomView from './views/RoomView';
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle, Utensils } from 'lucide-react';
 
 export default function App() {
   const { user, refreshProfile } = useAuth();
@@ -202,30 +202,55 @@ export default function App() {
         )}
       </main>
 
-      {/* Footer */}
-      <footer className="border-t border-zinc-200 dark:border-zinc-800/80 bg-white/40 dark:bg-zinc-950/40 py-5 text-xs text-zinc-500 dark:text-zinc-400">
-        <div className="mx-auto max-w-5xl px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-3 font-mono">
-          <p className="text-zinc-600 dark:text-zinc-400 text-center sm:text-left">
-            Batalha de Rodízio – Matheus Johnsson
-          </p>
+      {/* Footer com design próprio da Batalha de Rodízio */}
+      <footer className="border-t border-zinc-200/80 dark:border-zinc-800/80 bg-white/70 dark:bg-zinc-950/70 backdrop-blur-md py-4 transition-colors">
+        <div className="mx-auto max-w-5xl px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+          
+          {/* Brand & Author */}
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-orange-500/10 text-orange-600 dark:bg-orange-500/20 dark:text-orange-400 border border-orange-500/20 shadow-xs">
+              <Utensils className="h-4 w-4" />
+            </div>
+            <div className="text-center sm:text-left">
+              <span className="text-xs font-black tracking-tight text-zinc-900 dark:text-white block">
+                Batalha de Rodízio
+              </span>
+              <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                Desenvolvido por <span className="font-bold text-orange-600 dark:text-orange-400">Matheus Johnsson</span>
+              </p>
+            </div>
+          </div>
 
-          <div className="flex items-center gap-6">
+          {/* Center Status Tagline */}
+          <div className="hidden md:flex items-center gap-2 rounded-full border border-zinc-200 dark:border-zinc-800 bg-zinc-50/80 dark:bg-zinc-900/80 px-3.5 py-1 text-[11px] font-medium text-zinc-600 dark:text-zinc-400 shadow-2xs">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+            <span>Placar ao vivo para disputar quem come mais</span>
+          </div>
+
+          {/* Social Action Pills */}
+          <div className="flex items-center gap-2.5">
             <a
               href="https://www.linkedin.com/in/matheus-luiz-johnsson-9981642b9/"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white underline underline-offset-4 decoration-zinc-400 dark:decoration-zinc-600 hover:decoration-orange-500 transition-colors"
+              className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 hover:bg-white dark:bg-zinc-900 dark:hover:bg-zinc-850 text-xs font-bold text-zinc-700 dark:text-zinc-300 hover:text-blue-600 dark:hover:text-blue-400 hover:border-blue-500/30 transition-all shadow-2xs hover:scale-105 active:scale-95"
             >
-              LinkedIn
+              <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
+                <path d="M19 3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14m-.5 15.5v-5.3a3.26 3.26 0 0 0-3.26-3.26c-.85 0-1.84.52-2.28 1.3v-1.11h-2.79v8.37h2.79v-4.93c0-.77.62-1.4 1.39-1.4a1.4 1.4 0 0 1 1.4 1.4v4.93h2.75M6.46 10.9v8.37H9.2V10.9H6.46M7.83 6.78a1.64 1.64 0 0 0-1.63 1.63 1.63 1.63 0 0 0 1.63 1.63 1.63 1.63 0 0 0 1.63-1.63c0-.9-.73-1.63-1.63-1.63Z" />
+              </svg>
+              <span>LinkedIn</span>
             </a>
 
             <a
               href="https://github.com/ironJohnsson"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white underline underline-offset-4 decoration-zinc-400 dark:decoration-zinc-600 hover:decoration-orange-500 transition-colors"
+              className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 hover:bg-white dark:bg-zinc-900 dark:hover:bg-zinc-850 text-xs font-bold text-zinc-700 dark:text-zinc-300 hover:text-orange-600 dark:hover:text-orange-400 hover:border-orange-500/30 transition-all shadow-2xs hover:scale-105 active:scale-95"
             >
-              GitHub
+              <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
+                <path fillRule="evenodd" clipRule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" />
+              </svg>
+              <span>GitHub</span>
             </a>
           </div>
         </div>
