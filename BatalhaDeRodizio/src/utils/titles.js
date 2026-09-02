@@ -8,3 +8,4 @@ export function getTitleByStats(wins = 0, totalSlices = 0) {
   if (w >= 5 || s >= 50) return 'Intermediário de Mesa';
   return 'Iniciante no Rodízio';
 }
+
