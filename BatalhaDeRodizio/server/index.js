@@ -30,6 +30,10 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', time: new Date().toISOString() });
 });
 
+app.get('/api/stats/active-rooms', (req, res) => {
+  res.json({ rooms: roomsManager.listActiveRooms() });
+});
+
 // Serve frontend build in production
 const distPath = path.join(__dirname, '../dist');
 app.use(express.static(distPath));
@@ -45,17 +49,27 @@ const io = new Server(server, {
 io.on('connection', (socket) => {
   console.log(`[Socket] Conectado: ${socket.id}`);
 
+  // List Active Rooms
+  socket.on('rooms:get_active', (callback) => {
+    if (typeof callback === 'function') {
+      callback({ rooms: roomsManager.listActiveRooms() });
+    }
+  });
+
   // Create Room
-  socket.on('room:create', async ({ name, hostUserId, hostNickname }, callback) => {
+  socket.on('room:create', async ({ name, hostUserId, hostNickname, type, password }, callback) => {
     try {
       const room = await roomsManager.createRoom({
         name,
         hostUserId,
         hostNickname: hostNickname || 'Anfitrião',
-        hostSocketId: socket.id
+        hostSocketId: socket.id,
+        type,
+        password
       });
       socket.join(room.code);
-      console.log(`[Sala Criada] Código: ${room.code} por ${hostNickname}`);
+      console.log(`[Sala Criada] Código: ${room.code} (${room.type}) por ${hostNickname}`);
+      io.emit('rooms:updated_list', roomsManager.listActiveRooms());
       if (typeof callback === 'function') callback({ success: true, room });
     } catch (err) {
       console.error('Erro ao criar sala:', err);
@@ -64,7 +78,7 @@ io.on('connection', (socket) => {
   });
 
   // Join Room
-  socket.on('room:join', async ({ code, userId, nickname }, callback) => {
+  socket.on('room:join', async ({ code, userId, nickname, roomPassword }, callback) => {
     try {
       if (!code || !nickname) {
         if (typeof callback === 'function') callback({ success: false, error: 'Código e apelido são obrigatórios.' });
@@ -75,11 +89,18 @@ io.on('connection', (socket) => {
         code,
         socketId: socket.id,
         userId: userId || null,
-        nickname: nickname.trim()
+        nickname: nickname.trim(),
+        roomPassword
       });
 
       if (result.error) {
-        if (typeof callback === 'function') callback({ success: false, error: result.error });
+        if (typeof callback === 'function') {
+          callback({ 
+            success: false, 
+            error: result.error,
+            requiresPassword: result.requiresPassword 
+          });
+        }
         return;
       }
 
@@ -89,6 +110,7 @@ io.on('connection', (socket) => {
 
       // Broadcast update to all in the room
       io.to(room.code).emit('room:updated', room);
+      io.emit('rooms:updated_list', roomsManager.listActiveRooms());
 
       if (typeof callback === 'function') callback({ success: true, room });
     } catch (err) {
@@ -136,6 +158,7 @@ io.on('connection', (socket) => {
       console.log(`[Sala Finalizada] Sala ${code} finalizada por anfitrião.`);
       io.to(code).emit('room:finished', result.room);
       io.to(code).emit('room:updated', result.room);
+      io.emit('rooms:updated_list', roomsManager.listActiveRooms());
 
       if (typeof callback === 'function') callback({ success: true, room: result.room });
     } catch (err) {

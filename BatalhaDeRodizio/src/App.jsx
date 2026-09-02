@@ -67,13 +67,13 @@ export default function App() {
     };
   }, [refreshProfile]);
 
-  const handleCreateRoom = ({ name, hostUserId, hostNickname }) => {
+  const handleCreateRoom = ({ name, hostUserId, hostNickname, type, password }) => {
     if (!socket.connected) {
-      alert('Não foi possível conectar ao servidor. Verifique se o comando "npm run dev" foi executado no terminal para ligar o servidor backend.');
+      alert('Não foi possível conectar ao servidor. Verifique sua conexão com a internet.');
       return;
     }
 
-    socket.emit('room:create', { name, hostUserId, hostNickname }, (response) => {
+    socket.emit('room:create', { name, hostUserId, hostNickname, type, password }, (response) => {
       if (response && response.success) {
         setCurrentRoom(response.room);
       } else {
@@ -82,17 +82,26 @@ export default function App() {
     });
   };
 
-  const handleJoinRoom = ({ code, userId, nickname }) => {
+  const handleJoinRoom = ({ code, userId, nickname, roomPassword }, callback) => {
     if (!socket.connected) {
-      alert('Não foi possível conectar ao servidor. Verifique se o comando "npm run dev" foi executado no terminal para ligar o servidor backend.');
+      alert('Não foi possível conectar ao servidor. Verifique sua conexão com a internet.');
       return;
     }
 
-    socket.emit('room:join', { code, userId, nickname }, (response) => {
+    socket.emit('room:join', { code, userId, nickname, roomPassword }, (response) => {
       if (response && response.success) {
         setCurrentRoom(response.room);
+        if (typeof callback === 'function') callback({ success: true, room: response.room });
       } else {
-        alert(response?.error || 'Não foi possível entrar na sala. Verifique o código.');
+        if (typeof callback === 'function') {
+          callback({ 
+            success: false, 
+            error: response?.error || 'Não foi possível entrar na sala.',
+            requiresPassword: response?.requiresPassword 
+          });
+        } else {
+          alert(response?.error || 'Não foi possível entrar na sala. Verifique o código.');
+        }
       }
     });
   };

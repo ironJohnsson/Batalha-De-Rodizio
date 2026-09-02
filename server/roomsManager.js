@@ -12,17 +12,23 @@ function generateRoomCode() {
   return code;
 }
 
-async function createRoom({ name, hostUserId, hostNickname, hostSocketId }) {
+async function createRoom({ name, hostUserId, hostNickname, hostSocketId, type, password }) {
   let code = generateRoomCode();
   while (activeRooms.has(code)) {
     code = generateRoomCode();
   }
 
   const roomName = name && name.trim() ? name.trim() : `Mesa ${code}`;
+  const roomType = type && ['churrasco', 'pizza', 'outro'].includes(type.toLowerCase()) 
+    ? type.toLowerCase() 
+    : (type || 'pizza');
+  const roomPass = password && password.trim() ? password.trim() : null;
 
   const roomData = {
     code,
     name: roomName,
+    type: roomType,
+    password: roomPass,
     hostSocketId,
     hostUserId: hostUserId || null,
     hostNickname: hostNickname || 'Anfitrião',
@@ -54,9 +60,9 @@ async function createRoom({ name, hostUserId, hostNickname, hostSocketId }) {
   // Save room stub to DB
   try {
     await db.execute({
-      sql: `INSERT INTO rooms (code, name, host_user_id, status, created_at)
-      VALUES (?, ?, ?, 'active', CURRENT_TIMESTAMP)`,
-      args: [code, roomName, hostUserId || null]
+      sql: `INSERT INTO rooms (code, name, host_user_id, type, password, status, created_at)
+      VALUES (?, ?, ?, ?, ?, 'active', CURRENT_TIMESTAMP)`,
+      args: [code, roomName, hostUserId || null, roomType, roomPass]
     });
   } catch (err) {
     console.error('Erro ao salvar sala no banco:', err.message);
@@ -65,7 +71,22 @@ async function createRoom({ name, hostUserId, hostNickname, hostSocketId }) {
   return formatRoomPayload(roomData);
 }
 
-async function joinRoom({ code, socketId, userId, nickname }) {
+function listActiveRooms() {
+  return Array.from(activeRooms.values())
+    .filter(room => room.status === 'active')
+    .map(room => ({
+      code: room.code,
+      name: room.name,
+      hostNickname: room.hostNickname,
+      type: room.type || 'pizza',
+      hasPassword: Boolean(room.password),
+      participantsCount: room.participants.size,
+      createdAt: room.createdAt
+    }))
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+}
+
+async function joinRoom({ code, socketId, userId, nickname, roomPassword }) {
   const formattedCode = code.toUpperCase().trim();
   const room = activeRooms.get(formattedCode);
 
@@ -75,6 +96,19 @@ async function joinRoom({ code, socketId, userId, nickname }) {
 
   if (room.status !== 'active') {
     return { error: 'Esta competição já foi finalizada.' };
+  }
+
+  // Room Password Check: if room is password protected and user is not host
+  if (room.password) {
+    const isHost = (userId && room.hostUserId === userId) || (room.hostSocketId === socketId);
+    if (!isHost) {
+      if (!roomPassword || roomPassword.trim() !== room.password) {
+        return { 
+          error: 'Senha da sala incorreta ou não fornecida.',
+          requiresPassword: true 
+        };
+      }
+    }
   }
 
   const cleanNickname = nickname.trim();
@@ -275,6 +309,8 @@ function formatRoomPayload(room) {
   return {
     code: room.code,
     name: room.name,
+    type: room.type || 'pizza',
+    hasPassword: Boolean(room.password),
     hostSocketId: room.hostSocketId,
     hostUserId: room.hostUserId,
     hostNickname: room.hostNickname,
@@ -290,6 +326,7 @@ function formatRoomPayload(room) {
 module.exports = {
   createRoom,
   joinRoom,
+  listActiveRooms,
   updateSlices,
   finishRoom,
   getRoom,

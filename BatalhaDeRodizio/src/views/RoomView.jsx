@@ -13,7 +13,10 @@ import {
   LogOut,
   AlertTriangle,
   Radio,
-  Clock
+  Clock,
+  Flame,
+  Sparkles,
+  Lock
 } from 'lucide-react';
 import QrCodeModal from '../components/QrCodeModal';
 
@@ -68,13 +71,31 @@ export default function RoomView({
             <Radio className="h-5 w-5 animate-pulse text-green-500" />
           </div>
           <div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <span className="text-xs font-bold uppercase tracking-wider text-zinc-400">
                 Sala Ao Vivo
               </span>
               <span className="font-mono text-sm font-black text-orange-600 dark:text-orange-400">
                 {room.code}
               </span>
+              {room.type && (
+                <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300">
+                  {room.type.toLowerCase() === 'churrasco' ? (
+                    <Flame className="w-3 h-3 text-red-500" />
+                  ) : room.type.toLowerCase() === 'pizza' ? (
+                    <Utensils className="w-3 h-3 text-amber-500" />
+                  ) : (
+                    <Sparkles className="w-3 h-3 text-purple-500" />
+                  )}
+                  <span className="capitalize">{room.type}</span>
+                </span>
+              )}
+              {room.hasPassword && (
+                <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full border border-amber-300/60 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-400">
+                  <Lock className="w-3 h-3" />
+                  <span>Privada</span>
+                </span>
+              )}
             </div>
             <h2 className="text-sm sm:text-base font-bold text-zinc-900 dark:text-white">
               {room.name}
