@@ -49,10 +49,18 @@ export default function App() {
       refreshProfile();
     }
 
+    function onRoomClosed(data) {
+      alert(data?.message || 'A sala foi encerrada pois todos os participantes saíram.');
+      setCurrentRoom(null);
+      setShowPodium(false);
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+
     socket.on('connect', onConnect);
     socket.on('disconnect', onDisconnect);
     socket.on('room:updated', onRoomUpdated);
     socket.on('room:finished', onRoomFinished);
+    socket.on('room:closed', onRoomClosed);
 
     if (socket.connected) {
       setSocketId(socket.id);
@@ -64,6 +72,7 @@ export default function App() {
       socket.off('disconnect', onDisconnect);
       socket.off('room:updated', onRoomUpdated);
       socket.off('room:finished', onRoomFinished);
+      socket.off('room:closed', onRoomClosed);
     };
   }, [refreshProfile]);
 
@@ -130,6 +139,9 @@ export default function App() {
 
   const handleLeaveRoom = () => {
     if (window.confirm('Tem certeza que deseja sair da sala atual?')) {
+      if (currentRoom) {
+        socket.emit('room:leave', { code: currentRoom.code });
+      }
       setCurrentRoom(null);
       setShowPodium(false);
       window.history.replaceState({}, document.title, window.location.pathname);
@@ -137,6 +149,9 @@ export default function App() {
   };
 
   const handleBackHomeFromPodium = () => {
+    if (currentRoom) {
+      socket.emit('room:leave', { code: currentRoom.code });
+    }
     setShowPodium(false);
     setCurrentRoom(null);
     window.history.replaceState({}, document.title, window.location.pathname);

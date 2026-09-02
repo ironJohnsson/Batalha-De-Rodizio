@@ -317,9 +317,78 @@ function formatRoomPayload(room) {
   };
 }
 
+async function leaveRoom({ code, socketId }) {
+  let targetCode = code ? code.toUpperCase().trim() : null;
+  let room = targetCode ? activeRooms.get(targetCode) : null;
+
+  if (!room) {
+    for (const [rCode, r] of activeRooms.entries()) {
+      if (r.participants.has(socketId)) {
+        targetCode = rCode;
+        room = r;
+        break;
+      }
+    }
+  }
+
+  if (!room || !targetCode) return null;
+
+  const participant = room.participants.get(socketId);
+  if (!participant) return null;
+
+  const leavingNick = participant.nickname;
+  room.participants.delete(socketId);
+
+  // If room is now empty, delete room
+  if (room.participants.size === 0) {
+    activeRooms.delete(targetCode);
+    console.log(`[Sala Encerrada] Todos saíram da sala ${targetCode}. Removida das ativas.`);
+    try {
+      await db.execute({
+        sql: `UPDATE rooms SET status = 'closed', finished_at = CURRENT_TIMESTAMP WHERE code = ? AND status = 'active'`,
+        args: [targetCode]
+      });
+    } catch (e) {
+      console.error('Erro ao fechar sala vazia no banco:', e);
+    }
+    return {
+      code: targetCode,
+      roomClosed: true,
+      nickname: leavingNick
+    };
+  }
+
+  // If host left, pass host to the next participant
+  let newHost = null;
+  if (room.hostSocketId === socketId) {
+    const nextParticipant = room.participants.values().next().value;
+    room.hostSocketId = nextParticipant.socketId;
+    room.hostNickname = nextParticipant.nickname;
+    room.hostUserId = nextParticipant.userId;
+    newHost = nextParticipant.nickname;
+  }
+
+  room.logs.unshift({
+    id: Date.now(),
+    text: newHost 
+      ? `${leavingNick} saiu da mesa. Novo anfitrião: ${newHost}!` 
+      : `${leavingNick} saiu da mesa.`,
+    type: 'system',
+    time: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+  });
+
+  return {
+    code: targetCode,
+    roomClosed: false,
+    room: formatRoomPayload(room),
+    nickname: leavingNick
+  };
+}
+
 module.exports = {
   createRoom,
   joinRoom,
+  leaveRoom,
   listActiveRooms,
   updateSlices,
   finishRoom,

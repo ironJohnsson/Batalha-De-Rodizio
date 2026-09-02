@@ -166,8 +166,41 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('disconnect', () => {
+  // Leave Room
+  socket.on('room:leave', async ({ code }, callback) => {
+    try {
+      const result = await roomsManager.leaveRoom({ code, socketId: socket.id });
+      if (result) {
+        socket.leave(result.code);
+        if (result.roomClosed) {
+          io.to(result.code).emit('room:closed', { message: 'A sala foi encerrada pois todos os participantes saíram.' });
+        } else {
+          io.to(result.code).emit('room:updated', result.room);
+        }
+        io.emit('rooms:updated_list', roomsManager.listActiveRooms());
+      }
+      if (typeof callback === 'function') callback({ success: true });
+    } catch (err) {
+      console.error('Erro ao sair da sala:', err);
+      if (typeof callback === 'function') callback({ success: false, error: 'Erro ao sair da sala.' });
+    }
+  });
+
+  socket.on('disconnect', async () => {
     console.log(`[Socket] Desconectado: ${socket.id}`);
+    try {
+      const result = await roomsManager.leaveRoom({ socketId: socket.id });
+      if (result) {
+        if (result.roomClosed) {
+          io.to(result.code).emit('room:closed', { message: 'A sala foi encerrada pois todos os participantes saíram.' });
+        } else {
+          io.to(result.code).emit('room:updated', result.room);
+        }
+        io.emit('rooms:updated_list', roomsManager.listActiveRooms());
+      }
+    } catch (err) {
+      console.error('Erro ao processar desconexão:', err);
+    }
   });
 });
 
