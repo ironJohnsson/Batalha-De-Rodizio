@@ -57,6 +57,7 @@ io.on('connection', (socket) => {
   });
 
   // Create Room
+  socket.on('room:create', async ({ name, hostUserId, hostNickname, type, password }, callback) => {
   socket.on('room:create', async ({ name, hostUserId, hostNickname, password }, callback) => {
     try {
       const room = await roomsManager.createRoom({
@@ -64,9 +65,11 @@ io.on('connection', (socket) => {
         hostUserId,
         hostNickname: hostNickname || 'Anfitrião',
         hostSocketId: socket.id,
+        type,
         password
       });
       socket.join(room.code);
+      console.log(`[Sala Criada] Código: ${room.code} (${room.type}) por ${hostNickname}`);
       console.log(`[Sala Criada] Código: ${room.code} por ${hostNickname}`);
       io.emit('rooms:updated_list', roomsManager.listActiveRooms());
       if (typeof callback === 'function') callback({ success: true, room });
