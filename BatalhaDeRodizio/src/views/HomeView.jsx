@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { apiRequest } from '../services/api';
+import { getTitleByStats } from '../utils/titles';
 import { 
   Users, 
   PlusCircle, 
@@ -14,7 +15,9 @@ import {
   Sparkles, 
   User,
   Lock,
-  CheckCircle2
+  Edit3,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 
 export default function HomeView({ 
@@ -29,6 +32,7 @@ export default function HomeView({
   const [roomName, setRoomName] = useState('');
   const [guestNickname, setGuestNickname] = useState('');
   const [guestPassword, setGuestPassword] = useState('');
+  const [showGuestPassword, setShowGuestPassword] = useState(false);
   const [wantAccount, setWantAccount] = useState(false);
   const [activeTab, setActiveTab] = useState('join');
   const [leaderboard, setLeaderboard] = useState({ topWins: [], topSlices: [] });
@@ -149,6 +153,8 @@ export default function HomeView({
     }
   };
 
+  const currentTitle = isAuthenticated ? getTitleByStats(stats?.wins, stats?.total_slices) : '';
+
   return (
     <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
       <div className="mb-8 text-center sm:text-left sm:flex sm:items-center sm:justify-between">
@@ -165,7 +171,7 @@ export default function HomeView({
           <div className="mt-4 sm:mt-0 flex justify-center sm:justify-end">
             <button
               onClick={onOpenAuth}
-              className="inline-flex items-center gap-2 rounded-2xl border border-orange-500/30 bg-orange-500/10 px-4 py-2.5 text-xs font-bold text-orange-600 dark:text-orange-400 hover:bg-orange-500/20 transition-all"
+              className="inline-flex items-center gap-2 rounded-2xl border border-orange-500/30 bg-orange-500/10 px-4 py-2.5 text-xs font-bold text-orange-600 dark:text-orange-400 hover:bg-orange-500/20 transition-all cursor-pointer"
             >
               <Sparkles className="h-4 w-4" />
               <span>Salvar histórico e médias: Crie sua conta</span>
@@ -182,7 +188,7 @@ export default function HomeView({
               <button
                 type="button"
                 onClick={() => { setActiveTab('join'); setError(''); }}
-                className={`flex items-center justify-center gap-2 rounded-xl py-2.5 text-xs font-bold transition-all ${
+                className={`flex items-center justify-center gap-2 rounded-xl py-2.5 text-xs font-bold transition-all cursor-pointer ${
                   activeTab === 'join'
                     ? 'bg-white text-zinc-900 shadow-xs dark:bg-zinc-800 dark:text-orange-400 dark:border dark:border-zinc-700'
                     : 'text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200'
@@ -194,7 +200,7 @@ export default function HomeView({
               <button
                 type="button"
                 onClick={() => { setActiveTab('create'); setError(''); }}
-                className={`flex items-center justify-center gap-2 rounded-xl py-2.5 text-xs font-bold transition-all ${
+                className={`flex items-center justify-center gap-2 rounded-xl py-2.5 text-xs font-bold transition-all cursor-pointer ${
                   activeTab === 'create'
                     ? 'bg-white text-zinc-900 shadow-xs dark:bg-zinc-800 dark:text-orange-400 dark:border dark:border-zinc-700'
                     : 'text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200'
@@ -263,17 +269,22 @@ export default function HomeView({
                       </label>
 
                       {wantAccount && (
-                        <div className="mt-2.5 animate-in fade-in duration-150">
+                        <div className="mt-2.5 animate-in fade-in duration-150 relative">
                           <input
-                            type="password"
+                            type={showGuestPassword ? "text" : "password"}
                             value={guestPassword}
                             onChange={(e) => setGuestPassword(e.target.value)}
                             placeholder="Crie ou digite sua senha"
-                            className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs text-zinc-900 placeholder:text-zinc-400 focus:border-orange-500 focus:outline-hidden focus:ring-2 focus:ring-orange-500/20 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+                            className="w-full rounded-xl border border-zinc-200 bg-white pr-10 px-3 py-2 text-xs text-zinc-900 placeholder:text-zinc-400 focus:border-orange-500 focus:outline-hidden focus:ring-2 focus:ring-orange-500/20 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
                           />
-                          <p className="text-[10px] text-zinc-500 dark:text-zinc-400 mt-1">
-                            Sua conta será salva para registrar suas fatias, médias e vitórias para sempre.
-                          </p>
+                          <button
+                            type="button"
+                            onClick={() => setShowGuestPassword(!showGuestPassword)}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-colors"
+                            title={showGuestPassword ? "Ocultar senha" : "Ver senha"}
+                          >
+                            {showGuestPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                          </button>
                         </div>
                       )}
                     </div>
@@ -283,7 +294,7 @@ export default function HomeView({
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="w-full flex items-center justify-center gap-2 rounded-2xl bg-orange-600 py-4 text-sm font-bold text-white shadow-lg shadow-orange-600/30 hover:bg-orange-500 transition-all focus:outline-hidden focus:ring-2 focus:ring-orange-500/50 disabled:opacity-50"
+                  className="w-full flex items-center justify-center gap-2 rounded-2xl bg-orange-600 py-4 text-sm font-bold text-white shadow-lg shadow-orange-600/30 hover:bg-orange-500 transition-all focus:outline-hidden focus:ring-2 focus:ring-orange-500/50 disabled:opacity-50 cursor-pointer"
                 >
                   <span>{isSubmitting ? 'Entrando...' : 'Entrar na Batalha'}</span>
                   <ArrowRight className="h-4 w-4" />
@@ -340,14 +351,22 @@ export default function HomeView({
                       </label>
 
                       {wantAccount && (
-                        <div className="mt-2.5 animate-in fade-in duration-150">
+                        <div className="mt-2.5 animate-in fade-in duration-150 relative">
                           <input
-                            type="password"
+                            type={showGuestPassword ? "text" : "password"}
                             value={guestPassword}
                             onChange={(e) => setGuestPassword(e.target.value)}
                             placeholder="Crie ou digite sua senha"
-                            className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs text-zinc-900 placeholder:text-zinc-400 focus:border-orange-500 focus:outline-hidden focus:ring-2 focus:ring-orange-500/20 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+                            className="w-full rounded-xl border border-zinc-200 bg-white pr-10 px-3 py-2 text-xs text-zinc-900 placeholder:text-zinc-400 focus:border-orange-500 focus:outline-hidden focus:ring-2 focus:ring-orange-500/20 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
                           />
+                          <button
+                            type="button"
+                            onClick={() => setShowGuestPassword(!showGuestPassword)}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-colors"
+                            title={showGuestPassword ? "Ocultar senha" : "Ver senha"}
+                          >
+                            {showGuestPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                          </button>
                         </div>
                       )}
                     </div>
@@ -361,7 +380,7 @@ export default function HomeView({
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="w-full flex items-center justify-center gap-2 rounded-2xl bg-orange-600 py-4 text-sm font-bold text-white shadow-lg shadow-orange-600/30 hover:bg-orange-500 transition-all focus:outline-hidden focus:ring-2 focus:ring-orange-500/50 disabled:opacity-50"
+                  className="w-full flex items-center justify-center gap-2 rounded-2xl bg-orange-600 py-4 text-sm font-bold text-white shadow-lg shadow-orange-600/30 hover:bg-orange-500 transition-all focus:outline-hidden focus:ring-2 focus:ring-orange-500/50 disabled:opacity-50 cursor-pointer"
                 >
                   <PlusCircle className="h-4 w-4" />
                   <span>{isSubmitting ? 'Criando...' : 'Criar Sala e Gerar Código'}</span>
@@ -411,18 +430,24 @@ export default function HomeView({
         <div className="lg:col-span-5 space-y-6">
           {isAuthenticated && stats ? (
             <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-xl dark:border-zinc-800 dark:bg-zinc-900 transition-all">
-              <div className="flex items-center justify-between border-b border-zinc-100 pb-4 dark:border-zinc-800">
+              {/* Profile Card Header - Clickable anywhere to edit! */}
+              <div 
+                onClick={onOpenProfile}
+                className="group flex items-center justify-between border-b border-zinc-100 pb-4 dark:border-zinc-800 cursor-pointer"
+                title="Clique para abrir e editar seu perfil"
+              >
                 <div>
-                  <span className="text-xs font-bold uppercase tracking-wider text-zinc-400">
-                    Seu Perfil
+                  <span className="text-xs font-bold uppercase tracking-wider text-zinc-400 group-hover:text-amber-500 transition-colors flex items-center gap-1.5">
+                    <span>Seu Perfil</span>
+                    <Edit3 className="w-3 h-3 text-amber-500 opacity-80 group-hover:opacity-100 transition-opacity" />
                   </span>
-                  <h3 className="text-xl font-black text-zinc-900 dark:text-white">
+                  <h3 className="text-xl font-black text-zinc-900 dark:text-white group-hover:text-amber-500 transition-colors">
                     {user.nickname}
                   </h3>
                 </div>
-                <div className="inline-flex items-center gap-1.5 rounded-full bg-orange-500/10 px-3 py-1 text-xs font-bold text-orange-600 dark:text-orange-400 border border-orange-500/20">
+                <div className="inline-flex items-center gap-1.5 rounded-full bg-orange-500/10 px-3 py-1 text-xs font-bold text-orange-600 dark:text-orange-400 border border-orange-500/20 group-hover:scale-105 transition-transform">
                   <Award className="h-3.5 w-3.5" />
-                  <span>{stats.title}</span>
+                  <span>{currentTitle}</span>
                 </div>
               </div>
 
@@ -472,10 +497,10 @@ export default function HomeView({
               <button
                 type="button"
                 onClick={onOpenProfile}
-                className="mt-4 w-full flex items-center justify-center gap-2 rounded-2xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/80 py-2.5 text-xs font-bold text-zinc-800 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-all shadow-2xs"
+                className="mt-4 w-full flex items-center justify-center gap-2 rounded-2xl bg-amber-500 hover:bg-amber-600 text-white py-3 text-xs font-bold transition-all shadow-md shadow-amber-500/20 cursor-pointer"
               >
-                <User className="h-3.5 w-3.5 text-amber-500" />
-                <span>Ver / Alterar Meu Apelido</span>
+                <Edit3 className="h-4 w-4" />
+                <span>Editar Perfil e Alterar Apelido</span>
               </button>
             </div>
           ) : (
@@ -489,7 +514,7 @@ export default function HomeView({
               </p>
               <button
                 onClick={onOpenAuth}
-                className="w-full rounded-2xl bg-orange-600 py-3 text-xs font-bold text-white shadow-md shadow-orange-600/30 hover:bg-orange-500 transition-all"
+                className="w-full rounded-2xl bg-orange-600 py-3 text-xs font-bold text-white shadow-md shadow-orange-600/30 hover:bg-orange-500 transition-all cursor-pointer"
               >
                 Entrar ou Criar Conta
               </button>
@@ -511,7 +536,7 @@ export default function HomeView({
                 {leaderboard.topWins.map((champ, idx) => (
                   <div 
                     key={idx}
-                    className="flex items-center justify-between p-2.5 rounded-2xl bg-zinc-50 dark:bg-zinc-950/50 border border-zinc-100 dark:border-zinc-800/80"
+                    className="flex items-center justify-between p-3 rounded-2xl bg-zinc-50 dark:bg-zinc-950/50 border border-zinc-100 dark:border-zinc-800/80"
                   >
                     <div className="flex items-center gap-2.5">
                       <span className={`w-6 text-center font-mono font-black text-xs ${
@@ -523,8 +548,8 @@ export default function HomeView({
                         <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100 block leading-tight">
                           {champ.nickname}
                         </span>
-                        <span className="text-[10px] text-zinc-400">
-                          Média: {champ.avg_slices} fatias
+                        <span className="text-[11px] text-zinc-500 dark:text-zinc-400 font-medium">
+                          (Média de fatias: <strong className="text-zinc-700 dark:text-zinc-300">{champ.avg_slices}</strong>)
                         </span>
                       </div>
                     </div>
