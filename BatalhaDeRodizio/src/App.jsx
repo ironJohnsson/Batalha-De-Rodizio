@@ -203,13 +203,32 @@ export default function App() {
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-zinc-200 py-6 text-center text-xs text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
-        <p className="font-semibold text-zinc-700 dark:text-zinc-300">
-          Batalha de Rodízio • O placar definitivo para sua mesa
-        </p>
-        <p className="mt-1 text-[11px]">
-          Tempo real entre celulares • Sem limite de participantes
-        </p>
+      <footer className="border-t border-zinc-200 dark:border-zinc-800/80 bg-white/40 dark:bg-zinc-950/40 py-5 text-xs text-zinc-500 dark:text-zinc-400">
+        <div className="mx-auto max-w-5xl px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-3 font-mono">
+          <p className="text-zinc-600 dark:text-zinc-400 text-center sm:text-left">
+            Batalha de Rodízio – Matheus Johnsson
+          </p>
+
+          <div className="flex items-center gap-6">
+            <a
+              href="https://www.linkedin.com/in/matheus-luiz-johnsson-9981642b9/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white underline underline-offset-4 decoration-zinc-400 dark:decoration-zinc-600 hover:decoration-orange-500 transition-colors"
+            >
+              LinkedIn
+            </a>
+
+            <a
+              href="https://github.com/ironJohnsson"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white underline underline-offset-4 decoration-zinc-400 dark:decoration-zinc-600 hover:decoration-orange-500 transition-colors"
+            >
+              GitHub
+            </a>
+          </div>
+        </div>
       </footer>
 
       {/* Auth Modal */}
