@@ -3,6 +3,8 @@ import { useAuth } from '../context/AuthContext';
 import { apiRequest } from '../services/api';
 import socket from '../services/socket';
 import { getTitleByStats } from '../utils/titles';
+import { RODIZIO_TYPES, getRodizioConfig } from '../utils/rodizioTypes';
+import ChurrascoRulesModal from '../components/ChurrascoRulesModal';
 import { 
   Users, 
   PlusCircle, 
@@ -14,7 +16,6 @@ import {
   History, 
   ArrowRight, 
   Sparkles, 
-  User,
   Lock,
   Unlock,
   Edit3,
@@ -46,9 +47,16 @@ export default function HomeView({
 
   // Create Room states
   const [roomName, setRoomName] = useState('');
+  const [selectedRodizioType, setSelectedRodizioType] = useState('pizza');
   const [enableRoomPassword, setEnableRoomPassword] = useState(false);
   const [newRoomPassword, setNewRoomPassword] = useState('');
   const [showNewRoomPassword, setShowNewRoomPassword] = useState(false);
+
+  // Churrasco Rules Modal states
+  const [showChurrascoRulesModal, setShowChurrascoRulesModal] = useState(false);
+  const [churrascoRulesMode, setChurrascoRulesMode] = useState('create'); // 'create' | 'join'
+  const [pendingJoinData, setPendingJoinData] = useState(null);
+  const [pendingCreateData, setPendingCreateData] = useState(null);
 
   // Active Rooms (Search tab) states
   const [activeRooms, setActiveRooms] = useState([]);
@@ -120,28 +128,13 @@ export default function HomeView({
     };
   }, [isAuthenticated]);
 
-  // Handle Join by Code or Direct Selection
-  const handleJoin = async (e, directRoom = null) => {
-    if (e) e.preventDefault();
+  // Execute Join after validation and rules acceptance
+  const executeJoin = async ({ targetCode, currentRoomPassword }) => {
+    setIsSubmitting(true);
     setError('');
 
-    const targetCode = (directRoom?.code || roomCode).trim().toUpperCase();
-    const nickname = isAuthenticated ? user.nickname : guestNickname.trim();
-    const currentRoomPassword = directRoom ? selectedRoomPassword : roomCodePassword;
-
-    if (!targetCode) {
-      setError('Por favor, informe o código da sala.');
-      return;
-    }
-
-    if (!nickname) {
-      setError('Por favor, informe seu apelido na mesa.');
-      return;
-    }
-
-    setIsSubmitting(true);
-
     try {
+      const nickname = isAuthenticated ? user.nickname : guestNickname.trim();
       let finalUserId = user?.id || null;
       let finalNickname = nickname;
 
@@ -177,6 +170,97 @@ export default function HomeView({
     }
   };
 
+  // Handle Join by Code or Direct Selection
+  const handleJoin = async (e, directRoom = null) => {
+    if (e) e.preventDefault();
+    setError('');
+
+    const targetCode = (directRoom?.code || roomCode).trim().toUpperCase();
+    const nickname = isAuthenticated ? user.nickname : guestNickname.trim();
+    const currentRoomPassword = directRoom ? selectedRoomPassword : roomCodePassword;
+
+    if (!targetCode) {
+      setError('Por favor, informe o código da sala.');
+      return;
+    }
+
+    if (!nickname) {
+      setError('Por favor, informe seu apelido na mesa.');
+      return;
+    }
+
+    // Check if the room being joined is of type "churrasco"
+    let isChurrasco = false;
+    let roomTitle = directRoom?.name || '';
+
+    if (directRoom) {
+      isChurrasco = directRoom.type?.toLowerCase() === 'churrasco';
+    } else {
+      const foundInActive = activeRooms.find(r => r.code.toUpperCase() === targetCode);
+      if (foundInActive) {
+        isChurrasco = foundInActive.type?.toLowerCase() === 'churrasco';
+        roomTitle = foundInActive.name;
+      } else {
+        // Query server directly via socket
+        try {
+          const infoRes = await new Promise((resolve) => {
+            socket.emit('room:get_info', { code: targetCode }, resolve);
+          });
+          if (infoRes && infoRes.success && infoRes.room) {
+            isChurrasco = infoRes.room.type?.toLowerCase() === 'churrasco';
+            roomTitle = infoRes.room.name;
+          }
+        } catch (queryErr) {
+          console.warn('Erro ao consultar tipo da sala:', queryErr);
+        }
+      }
+    }
+
+    if (isChurrasco) {
+      setChurrascoRulesMode('join');
+      setPendingJoinData({ targetCode, currentRoomPassword, roomTitle });
+      setShowChurrascoRulesModal(true);
+      return;
+    }
+
+    await executeJoin({ targetCode, currentRoomPassword });
+  };
+
+  // Execute Create after validation and rules acceptance
+  const executeCreate = async (createData) => {
+    setIsSubmitting(true);
+    setError('');
+
+    try {
+      const nickname = isAuthenticated ? user.nickname : guestNickname.trim();
+      let finalUserId = user?.id || null;
+      let finalNickname = nickname;
+
+      if (!isAuthenticated && guestPassword) {
+        let authResult;
+        try {
+          authResult = await login(nickname, guestPassword);
+        } catch (loginErr) {
+          authResult = await register(nickname, guestPassword);
+        }
+        finalUserId = authResult.user.id;
+        finalNickname = authResult.user.nickname;
+      }
+
+      onCreateRoom({
+        name: createData.name,
+        type: createData.type,
+        hostUserId: finalUserId,
+        hostNickname: finalNickname,
+        password: createData.password
+      });
+    } catch (err) {
+      setError(err.message || 'Erro ao criar a sala.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   // Handle Create Room
   const handleCreate = async (e) => {
     e.preventDefault();
@@ -193,34 +277,26 @@ export default function HomeView({
       return;
     }
 
-    setIsSubmitting(true);
+    const typeConfig = getRodizioConfig(selectedRodizioType);
+    const finalRoomName = roomName.trim() || `Mesa de ${typeConfig.label}`;
+    const finalRoomPassword = enableRoomPassword ? newRoomPassword.trim() : null;
 
-    try {
-      let finalUserId = user?.id || null;
-      let finalNickname = nickname;
-
-      if (!isAuthenticated && guestPassword) {
-        let authResult;
-        try {
-          authResult = await login(nickname, guestPassword);
-        } catch (loginErr) {
-          authResult = await register(nickname, guestPassword);
-        }
-        finalUserId = authResult.user.id;
-        finalNickname = authResult.user.nickname;
-      }
-
-      onCreateRoom({
-        name: roomName.trim() || 'Mesa de Rodízio',
-        hostUserId: finalUserId,
-        hostNickname: finalNickname,
-        password: enableRoomPassword ? newRoomPassword.trim() : null
+    if (selectedRodizioType === 'churrasco') {
+      setChurrascoRulesMode('create');
+      setPendingCreateData({
+        name: finalRoomName,
+        type: 'churrasco',
+        password: finalRoomPassword
       });
-    } catch (err) {
-      setError(err.message || 'Erro ao criar a sala.');
-    } finally {
-      setIsSubmitting(false);
+      setShowChurrascoRulesModal(true);
+      return;
     }
+
+    await executeCreate({
+      name: finalRoomName,
+      type: selectedRodizioType,
+      password: finalRoomPassword
+    });
   };
 
   const currentTitle = isAuthenticated ? getTitleByStats(stats?.wins, stats?.total_slices) : '';
@@ -484,6 +560,16 @@ export default function HomeView({
                           <div className="flex items-start justify-between gap-3">
                             <div>
                               <div className="flex items-center gap-2 flex-wrap">
+                                {(() => {
+                                  const rConfig = getRodizioConfig(room.type);
+                                  const TypeIcon = rConfig.icon;
+                                  return (
+                                    <span className={`inline-flex items-center gap-1 text-[11px] font-extrabold px-2 py-0.5 rounded-lg border shadow-2xs ${rConfig.accentBg} ${rConfig.accentBorder}/40`}>
+                                      <TypeIcon className="w-3 h-3" />
+                                      <span>{rConfig.label}</span>
+                                    </span>
+                                  );
+                                })()}
                                 <h4 className="text-sm font-black text-zinc-900 dark:text-zinc-100">
                                   {room.name}
                                 </h4>
@@ -612,10 +698,56 @@ export default function HomeView({
                     type="text"
                     value={roomName}
                     onChange={(e) => setRoomName(e.target.value)}
-                    placeholder="Ex: Rodízio na Bella Pizza"
+                    placeholder="Ex: Rodízio dos Amigos"
                     maxLength={40}
                     className="w-full rounded-2xl border border-zinc-200 bg-zinc-50 py-3 px-4 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-orange-500 focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-orange-500/20 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:bg-zinc-950 dark:focus:border-orange-500"
                   />
+                </div>
+
+                {/* Tipo de Rodízio */}
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-zinc-600 dark:text-zinc-400 mb-2">
+                    Tipo de Rodízio
+                  </label>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {RODIZIO_TYPES.map((type) => {
+                      const Icon = type.icon;
+                      const isSelected = selectedRodizioType === type.id;
+                      return (
+                        <button
+                          key={type.id}
+                          type="button"
+                          onClick={() => setSelectedRodizioType(type.id)}
+                          className={`flex flex-col items-start p-3 rounded-2xl border text-left transition-all cursor-pointer ${
+                            isSelected
+                              ? `border-2 ${type.accentBorder} bg-white dark:bg-zinc-800 shadow-md ring-2 ring-orange-500/20`
+                              : 'border-zinc-200 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-950/40 hover:border-zinc-300 dark:hover:border-zinc-700'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between w-full mb-1.5">
+                            <div className={`p-1.5 rounded-xl ${isSelected ? type.accentBg : 'bg-zinc-200/60 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400'}`}>
+                              <Icon className="w-4 h-4" />
+                            </div>
+                            <span className="text-base">{type.emoji}</span>
+                          </div>
+                          <span className="text-xs font-black text-zinc-900 dark:text-white">
+                            {type.label}
+                          </span>
+                          <span className="text-[10px] text-zinc-400 line-clamp-1 mt-0.5">
+                            {type.description}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {selectedRodizioType === 'churrasco' && (
+                    <div className="mt-2.5 p-2.5 rounded-xl bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/40 text-[11px] text-red-700 dark:text-red-300 flex items-center gap-2 animate-in fade-in duration-150">
+                      <Flame className="w-4 h-4 text-red-500 shrink-0" />
+                      <span>
+                        <strong>Rodízio de Churrasco:</strong> Inclui regras de contagem de porções (ex: coração de galinha e queijo contam como 1 pedaço).
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Senha da Sala (Opcional) */}
@@ -915,6 +1047,25 @@ export default function HomeView({
           </div>
         </div>
       </div>
+
+      {/* Pop-up de Regras do Churrasco para Criação e Entrada */}
+      <ChurrascoRulesModal
+        isOpen={showChurrascoRulesModal}
+        onClose={() => {
+          setShowChurrascoRulesModal(false);
+          setPendingJoinData(null);
+          setPendingCreateData(null);
+        }}
+        onConfirm={() => {
+          if (churrascoRulesMode === 'create' && pendingCreateData) {
+            executeCreate(pendingCreateData);
+          } else if (churrascoRulesMode === 'join' && pendingJoinData) {
+            executeJoin(pendingJoinData);
+          }
+        }}
+        mode={churrascoRulesMode}
+        roomName={pendingJoinData?.roomTitle || pendingCreateData?.name || ''}
+      />
     </div>
   );
 }

@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { getRodizioConfig, getUnitLabel } from '../utils/rodizioTypes';
+import ChurrascoRulesModal from '../components/ChurrascoRulesModal';
 import {
   Plus,
   Minus,
@@ -9,13 +11,11 @@ import {
   QrCode,
   Copy,
   Check,
-  Utensils,
   LogOut,
   AlertTriangle,
   Radio,
   Clock,
   Flame,
-  Sparkles,
   Lock
 } from 'lucide-react';
 import QrCodeModal from '../components/QrCodeModal';
@@ -30,6 +30,7 @@ export default function RoomView({
   const { user } = useAuth();
   const [showQrModal, setShowQrModal] = useState(false);
   const [showConfirmFinish, setShowConfirmFinish] = useState(false);
+  const [showRulesInfo, setShowRulesInfo] = useState(false);
   const [copiedCode, setCopiedCode] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
 
@@ -42,6 +43,12 @@ export default function RoomView({
 
   const isHost = (currentSocketId && room.hostSocketId === currentSocketId) ||
                  (user && room.hostUserId && user.id === room.hostUserId);
+
+  const typeConfig = getRodizioConfig(room.type);
+  const TypeIcon = typeConfig.icon;
+  const isChurrasco = (room.type || '').toLowerCase() === 'churrasco';
+  const unitLabelSingular = typeConfig.unitSingular;
+  const unitLabelPlural = typeConfig.unitPlural;
 
   const handleAddSlice = () => {
     setIsAnimating(true);
@@ -79,15 +86,9 @@ export default function RoomView({
                 {room.code}
               </span>
               {room.type && (
-                <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300">
-                  {room.type.toLowerCase() === 'churrasco' ? (
-                    <Flame className="w-3 h-3 text-red-500" />
-                  ) : room.type.toLowerCase() === 'pizza' ? (
-                    <Utensils className="w-3 h-3 text-amber-500" />
-                  ) : (
-                    <Sparkles className="w-3 h-3 text-purple-500" />
-                  )}
-                  <span className="capitalize">{room.type}</span>
+                <span className={`inline-flex items-center gap-1 text-[11px] font-extrabold px-2.5 py-0.5 rounded-full border shadow-2xs ${typeConfig.accentBg} ${typeConfig.accentBorder}/40`}>
+                  <TypeIcon className="w-3 h-3" />
+                  <span>{typeConfig.label}</span>
                 </span>
               )}
               {room.hasPassword && (
@@ -104,10 +105,21 @@ export default function RoomView({
         </div>
 
         <div className="flex items-center gap-2">
+          {isChurrasco && (
+            <button
+              onClick={() => setShowRulesInfo(true)}
+              title="Ver regras de contagem do churrasco"
+              className="flex items-center gap-1.5 rounded-xl border border-red-200 dark:border-red-900/60 bg-red-50 dark:bg-red-950/40 px-3 py-2 text-xs font-bold text-red-700 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/60 transition-all cursor-pointer shadow-2xs"
+            >
+              <Flame className="h-3.5 w-3.5 text-red-500 animate-pulse" />
+              <span>Regras</span>
+            </button>
+          )}
+
           <button
             onClick={handleCopyCode}
             title="Copiar código da sala"
-            className="flex items-center gap-1.5 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs font-bold text-zinc-700 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-750 transition-all"
+            className="flex items-center gap-1.5 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs font-bold text-zinc-700 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-750 transition-all cursor-pointer"
           >
             {copiedCode ? (
               <>
@@ -125,7 +137,7 @@ export default function RoomView({
           <button
             onClick={() => setShowQrModal(true)}
             title="Exibir QR Code para a mesa"
-            className="flex items-center gap-1.5 rounded-xl bg-zinc-900 px-3 py-2 text-xs font-bold text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white transition-all shadow-sm"
+            className="flex items-center gap-1.5 rounded-xl bg-zinc-900 px-3 py-2 text-xs font-bold text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white transition-all shadow-sm cursor-pointer"
           >
             <QrCode className="h-3.5 w-3.5" />
             <span>QR Code</span>
@@ -134,7 +146,7 @@ export default function RoomView({
           <button
             onClick={onLeaveRoom}
             title="Sair da sala"
-            className="flex items-center justify-center h-8 w-8 rounded-xl border border-zinc-200 text-zinc-400 hover:text-red-500 hover:border-red-200 dark:border-zinc-800 dark:hover:border-red-900 dark:hover:text-red-400 transition-all"
+            className="flex items-center justify-center h-8 w-8 rounded-xl border border-zinc-200 text-zinc-400 hover:text-red-500 hover:border-red-200 dark:border-zinc-800 dark:hover:border-red-900 dark:hover:text-red-400 transition-all cursor-pointer"
           >
             <LogOut className="h-4 w-4" />
           </button>
@@ -145,7 +157,7 @@ export default function RoomView({
         <div className="md:col-span-7 space-y-6">
           <div className="rounded-3xl border border-zinc-200 bg-white p-6 sm:p-8 shadow-xl dark:border-zinc-800 dark:bg-zinc-900 text-center transition-all">
             <div className="inline-flex items-center gap-1.5 rounded-full bg-orange-500/10 px-3 py-1 text-xs font-bold text-orange-600 dark:text-orange-400 mb-4">
-              <Utensils className="h-3.5 w-3.5" />
+              <TypeIcon className="h-3.5 w-3.5" />
               <span>{myEntry.nickname} (Seu Contador)</span>
             </div>
 
@@ -158,7 +170,10 @@ export default function RoomView({
                 {myEntry.slices}
               </span>
               <p className="text-xs font-bold uppercase tracking-widest text-zinc-400 mt-1">
-                {myEntry.slices === 1 ? 'fatia comida' : 'fatias comidas'}
+                {myEntry.slices} {myEntry.slices === 1 ? unitLabelSingular : unitLabelPlural}{' '}
+                {room.type?.toLowerCase() === 'bebida'
+                  ? (myEntry.slices === 1 ? 'bebido' : 'bebidos')
+                  : (myEntry.slices === 1 ? 'comido' : 'comidos')}
               </p>
             </div>
 
@@ -166,20 +181,20 @@ export default function RoomView({
               <button
                 type="button"
                 onClick={handleAddSlice}
-                className="group relative flex w-full items-center justify-center gap-3 rounded-2xl bg-gradient-to-tr from-amber-600 to-orange-500 py-5 text-xl font-black text-white shadow-xl shadow-orange-500/30 active:scale-98 hover:brightness-105 transition-all focus:outline-none focus:ring-4 focus:ring-orange-500/40"
+                className="group relative flex w-full items-center justify-center gap-3 rounded-2xl bg-gradient-to-tr from-amber-600 to-orange-500 py-5 text-xl font-black text-white shadow-xl shadow-orange-500/30 active:scale-98 hover:brightness-105 transition-all focus:outline-none focus:ring-4 focus:ring-orange-500/40 cursor-pointer"
               >
                 <Plus className="h-7 w-7 transition-transform group-hover:rotate-90" />
-                <span>+1 FATIA</span>
+                <span>{typeConfig.buttonAdd}</span>
               </button>
 
               <button
                 type="button"
                 onClick={handleSubSlice}
                 disabled={myEntry.slices <= 0}
-                className="flex items-center justify-center gap-2 rounded-xl py-2.5 text-xs font-bold text-zinc-500 hover:text-zinc-900 disabled:opacity-30 dark:text-zinc-400 dark:hover:text-white transition-all"
+                className="flex items-center justify-center gap-2 rounded-xl py-2.5 text-xs font-bold text-zinc-500 hover:text-zinc-900 disabled:opacity-30 dark:text-zinc-400 dark:hover:text-white transition-all cursor-pointer"
               >
                 <Minus className="h-3.5 w-3.5" />
-                <span>Desfazer última fatia (-1)</span>
+                <span>{typeConfig.actionSub}</span>
               </button>
             </div>
           </div>
@@ -279,7 +294,7 @@ export default function RoomView({
                         {p.slices}
                       </span>
                       <span className="text-[10px] text-zinc-400 block font-medium">
-                        fatias
+                        {getUnitLabel(room.type, p.slices)}
                       </span>
                     </div>
                   </div>
@@ -288,9 +303,9 @@ export default function RoomView({
             </div>
 
             <div className="mt-4 pt-3 border-t border-zinc-100 dark:border-zinc-800 flex items-center justify-between text-xs text-zinc-500 dark:text-zinc-400">
-              <span>Total comido na mesa:</span>
+              <span>Total consumido na mesa:</span>
               <span className="font-mono font-bold text-zinc-900 dark:text-white">
-                {totalTableSlices} fatias
+                {totalTableSlices} {getUnitLabel(room.type, totalTableSlices)}
               </span>
             </div>
           </div>
@@ -369,6 +384,14 @@ export default function RoomView({
           </div>
         </div>
       )}
+
+      {/* Modal de Consulta de Regras do Churrasco */}
+      <ChurrascoRulesModal
+        isOpen={showRulesInfo}
+        onClose={() => setShowRulesInfo(false)}
+        mode="info"
+        roomName={room.name}
+      />
     </div>
   );
 }

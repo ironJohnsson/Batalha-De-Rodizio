@@ -56,18 +56,36 @@ io.on('connection', (socket) => {
     }
   });
 
+  // Get Room Info (for preview, rules check & metadata)
+  socket.on('room:get_info', ({ code }, callback) => {
+    try {
+      const info = roomsManager.getRoomInfo(code);
+      if (typeof callback === 'function') {
+        if (!info) {
+          callback({ success: false, error: 'Sala não encontrada.' });
+        } else {
+          callback({ success: true, room: info });
+        }
+      }
+    } catch (err) {
+      console.error('Erro ao obter informações da sala:', err);
+      if (typeof callback === 'function') callback({ success: false, error: 'Erro ao obter sala.' });
+    }
+  });
+
   // Create Room
-  socket.on('room:create', async ({ name, hostUserId, hostNickname, password }, callback) => {
+  socket.on('room:create', async ({ name, hostUserId, hostNickname, password, type }, callback) => {
     try {
       const room = await roomsManager.createRoom({
         name,
         hostUserId,
         hostNickname: hostNickname || 'Anfitrião',
         hostSocketId: socket.id,
-        password
+        password,
+        type
       });
       socket.join(room.code);
-      console.log(`[Sala Criada] Código: ${room.code} por ${hostNickname}`);
+      console.log(`[Sala Criada] Código: ${room.code} (${room.type}) por ${hostNickname}`);
       io.emit('rooms:updated_list', roomsManager.listActiveRooms());
       if (typeof callback === 'function') callback({ success: true, room });
     } catch (err) {

@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import confetti from 'canvas-confetti';
 import { Trophy, Crown, Medal, Home } from 'lucide-react';
+import { getUnitLabel } from '../utils/rodizioTypes';
 
 export default function PodiumModal({ isOpen, room, onBackHome }) {
   useEffect(() => {
@@ -23,6 +24,7 @@ export default function PodiumModal({ isOpen, room, onBackHome }) {
   const top3 = participants[2];
 
   const totalSlicesInRoom = participants.reduce((acc, p) => acc + (p.slices || 0), 0);
+  const isBebida = room.type?.toLowerCase() === 'bebida';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md p-4 overflow-y-auto">
@@ -42,7 +44,7 @@ export default function PodiumModal({ isOpen, room, onBackHome }) {
           <div className="my-6 rounded-2xl bg-gradient-to-b from-amber-500/10 to-orange-500/10 p-5 border border-amber-500/30 text-center">
             <div className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/20 px-3 py-1 text-xs font-bold text-amber-600 dark:text-amber-400 mb-2">
               <Crown className="h-4 w-4" />
-              <span>Grande Campeão do Rodízio</span>
+              <span>Grande Campeão da Batalha</span>
             </div>
             <h3 className="text-2xl font-black text-zinc-900 dark:text-white">
               {top1.nickname}
@@ -52,14 +54,14 @@ export default function PodiumModal({ isOpen, room, onBackHome }) {
                 {top1.slices}
               </span>
               <span className="text-sm font-bold text-zinc-500 dark:text-zinc-400">
-                fatias devoradas
+                {getUnitLabel(room.type, top1.slices)} {isBebida ? 'consumidos' : 'devorados'}
               </span>
             </div>
           </div>
         ) : (
           <div className="my-6 rounded-2xl bg-zinc-100 dark:bg-zinc-800/60 p-4">
             <p className="text-sm text-zinc-600 dark:text-zinc-400">
-              Nenhuma fatia registrada nesta rodada.
+              Nenhuma unidade registrada nesta rodada.
             </p>
           </div>
         )}
@@ -76,7 +78,7 @@ export default function PodiumModal({ isOpen, room, onBackHome }) {
                   {top2.nickname}
                 </span>
                 <span className="font-mono text-sm font-black text-zinc-700 dark:text-zinc-300">
-                  {top2.slices} fatias
+                  {top2.slices} {getUnitLabel(room.type, top2.slices)}
                 </span>
               </div>
             ) : <div />}
@@ -91,7 +93,7 @@ export default function PodiumModal({ isOpen, room, onBackHome }) {
                   {top1.nickname}
                 </span>
                 <span className="font-mono text-lg font-black text-amber-600 dark:text-amber-400">
-                  {top1.slices} fatias
+                  {top1.slices} {getUnitLabel(room.type, top1.slices)}
                 </span>
               </div>
             ) : <div />}
@@ -106,7 +108,7 @@ export default function PodiumModal({ isOpen, room, onBackHome }) {
                   {top3.nickname}
                 </span>
                 <span className="font-mono text-sm font-black text-zinc-700 dark:text-zinc-300">
-                  {top3.slices} fatias
+                  {top3.slices} {getUnitLabel(room.type, top3.slices)}
                 </span>
               </div>
             ) : <div />}
@@ -119,7 +121,7 @@ export default function PodiumModal({ isOpen, room, onBackHome }) {
               Total da Mesa
             </span>
             <span className="text-lg font-bold text-zinc-900 dark:text-white">
-              {totalSlicesInRoom} fatias
+              {totalSlicesInRoom} {getUnitLabel(room.type, totalSlicesInRoom)}
             </span>
           </div>
           <div>
@@ -127,7 +129,7 @@ export default function PodiumModal({ isOpen, room, onBackHome }) {
               Média por Pessoa
             </span>
             <span className="text-lg font-bold text-zinc-900 dark:text-white">
-              {participants.length > 0 ? (totalSlicesInRoom / participants.length).toFixed(1) : 0} fatias
+              {participants.length > 0 ? (totalSlicesInRoom / participants.length).toFixed(1) : 0} {getUnitLabel(room.type, 2)}
             </span>
           </div>
         </div>

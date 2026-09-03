@@ -12,7 +12,7 @@ function generateRoomCode() {
   return code;
 }
 
-async function createRoom({ name, hostUserId, hostNickname, hostSocketId, password }) {
+async function createRoom({ name, hostUserId, hostNickname, hostSocketId, password, type }) {
   let code = generateRoomCode();
   while (activeRooms.has(code)) {
     code = generateRoomCode();
@@ -20,10 +20,12 @@ async function createRoom({ name, hostUserId, hostNickname, hostSocketId, passwo
 
   const roomName = name && name.trim() ? name.trim() : `Mesa ${code}`;
   const roomPass = password && password.trim() ? password.trim() : null;
+  const roomType = type && typeof type === 'string' ? type.toLowerCase().trim() : 'pizza';
 
   const roomData = {
     code,
     name: roomName,
+    type: roomType,
     password: roomPass,
     hostSocketId,
     hostUserId: hostUserId || null,
@@ -56,9 +58,9 @@ async function createRoom({ name, hostUserId, hostNickname, hostSocketId, passwo
   // Save room stub to DB
   try {
     await db.execute({
-      sql: `INSERT INTO rooms (code, name, host_user_id, password, status, created_at)
-      VALUES (?, ?, ?, ?, 'active', CURRENT_TIMESTAMP)`,
-      args: [code, roomName, hostUserId || null, roomPass]
+      sql: `INSERT INTO rooms (code, name, host_user_id, type, password, status, created_at)
+      VALUES (?, ?, ?, ?, ?, 'active', CURRENT_TIMESTAMP)`,
+      args: [code, roomName, hostUserId || null, roomType, roomPass]
     });
   } catch (err) {
     console.error('Erro ao salvar sala no banco:', err.message);
@@ -73,6 +75,7 @@ function listActiveRooms() {
     .map(room => ({
       code: room.code,
       name: room.name,
+      type: room.type || 'pizza',
       hostNickname: room.hostNickname,
       hasPassword: Boolean(room.password),
       participantsCount: room.participants.size,
@@ -304,6 +307,7 @@ function formatRoomPayload(room) {
   return {
     code: room.code,
     name: room.name,
+    type: room.type || 'pizza',
     hasPassword: Boolean(room.password),
     hostSocketId: room.hostSocketId,
     hostUserId: room.hostUserId,
@@ -385,6 +389,21 @@ async function leaveRoom({ code, socketId }) {
   };
 }
 
+function getRoomInfo(code) {
+  if (!code) return null;
+  const room = activeRooms.get(code.toUpperCase().trim());
+  if (!room) return null;
+  return {
+    code: room.code,
+    name: room.name,
+    type: room.type || 'pizza',
+    hasPassword: Boolean(room.password),
+    hostNickname: room.hostNickname,
+    participantsCount: room.participants.size,
+    status: room.status
+  };
+}
+
 module.exports = {
   createRoom,
   joinRoom,
@@ -393,5 +412,6 @@ module.exports = {
   updateSlices,
   finishRoom,
   getRoom,
+  getRoomInfo,
   handleDisconnect
 };

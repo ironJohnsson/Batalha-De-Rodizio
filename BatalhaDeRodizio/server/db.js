@@ -32,6 +32,8 @@ async function initDb() {
         code TEXT PRIMARY KEY,
         name TEXT NOT NULL,
         host_user_id INTEGER,
+        type TEXT DEFAULT 'pizza',
+        password TEXT,
         status TEXT DEFAULT 'active',
         winner_nickname TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -57,6 +59,11 @@ async function initDb() {
         FOREIGN KEY (room_code) REFERENCES rooms(code) ON DELETE CASCADE
       )`
     ]);
+
+    // Migration fallback for existing tables
+    try { await db.execute("ALTER TABLE rooms ADD COLUMN type TEXT DEFAULT 'pizza'"); } catch (e) {}
+    try { await db.execute("ALTER TABLE rooms ADD COLUMN password TEXT"); } catch (e) {}
+
     console.log(`[Database] Conectado e tabelas verificadas (${process.env.TURSO_DATABASE_URL ? 'Turso Cloud' : 'SQLite Local'})`);
   } catch (err) {
     console.error('[Database] Erro ao inicializar tabelas:', err);

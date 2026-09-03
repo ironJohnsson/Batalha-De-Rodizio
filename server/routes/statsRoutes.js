@@ -35,6 +35,7 @@ router.get('/history', authMiddleware, async (req, res) => {
       sql: `SELECT 
         r.code,
         r.name as room_name,
+        r.type as room_type,
         r.winner_nickname,
         r.finished_at,
         rp.slice_count,
