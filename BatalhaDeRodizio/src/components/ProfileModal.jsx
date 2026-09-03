@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { getRankInfo } from '../utils/titles';
 import { RODIZIO_TYPES, getRodizioConfig, getUnitLabel } from '../utils/rodizioTypes';
@@ -17,7 +17,10 @@ import {
   AlertCircle, 
   Target, 
   Swords,
-  Star
+  Star,
+  ChevronLeft,
+  ChevronRight,
+  LayoutGrid
 } from 'lucide-react';
 
 export default function ProfileModal({ isOpen, onClose, initialTab = 'general' }) {
@@ -25,6 +28,8 @@ export default function ProfileModal({ isOpen, onClose, initialTab = 'general' }
   const [activeTab, setActiveTab] = useState(initialTab);
   const [selectedRodizio, setSelectedRodizio] = useState('pizza');
   const [selectedAchievementCategory, setSelectedAchievementCategory] = useState('all');
+  const [wrapCategories, setWrapCategories] = useState(false);
+  const categoryScrollRef = useRef(null);
   const [typeStats, setTypeStats] = useState(null);
   const [loadingTypeStats, setLoadingTypeStats] = useState(false);
 
@@ -251,6 +256,15 @@ export default function ProfileModal({ isOpen, onClose, initialTab = 'general' }
     );
   };
 
+  const scrollCategories = (direction) => {
+    if (categoryScrollRef.current) {
+      categoryScrollRef.current.scrollBy({
+        left: direction === 'left' ? -160 : 160,
+        behavior: 'smooth'
+      });
+    }
+  };
+
   const renderAchievementsContent = () => {
     return (
       <div className="space-y-3.5">
@@ -290,35 +304,111 @@ export default function ProfileModal({ isOpen, onClose, initialTab = 'general' }
           </div>
         </div>
 
-        {/* Category Filter Pills */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
-          {ACHIEVEMENT_CATEGORIES.map(cat => {
-            const count = cat.id === 'all' 
-              ? achievementData.achievements.length 
-              : achievementData.achievements.filter(a => a.category === cat.id).length;
-            if (count === 0 && cat.id !== 'all') return null;
-            const isSelected = selectedAchievementCategory === cat.id;
+        {/* Category Filter Slider with Navigation Arrows & Wrap Toggle */}
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between text-[11px] font-bold text-zinc-500 dark:text-zinc-400">
+            <span>Filtrar por Modalidade:</span>
+            <button
+              type="button"
+              onClick={() => setWrapCategories(!wrapCategories)}
+              className="flex items-center gap-1 text-[10px] text-amber-600 dark:text-amber-400 hover:underline cursor-pointer"
+            >
+              <LayoutGrid className="w-3 h-3" />
+              <span>{wrapCategories ? 'Modo Carrossel' : 'Ver Todas'}</span>
+            </button>
+          </div>
 
-            return (
+          {wrapCategories ? (
+            /* Multi-line Wrapped Grid */
+            <div className="flex flex-wrap items-center gap-1.5 py-1">
+              {ACHIEVEMENT_CATEGORIES.map(cat => {
+                const count = cat.id === 'all' 
+                  ? achievementData.achievements.length 
+                  : achievementData.achievements.filter(a => a.category === cat.id).length;
+                if (count === 0 && cat.id !== 'all') return null;
+                const isSelected = selectedAchievementCategory === cat.id;
+
+                return (
+                  <button
+                    key={cat.id}
+                    type="button"
+                    onClick={() => setSelectedAchievementCategory(cat.id)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-bold whitespace-nowrap transition-all cursor-pointer ${
+                      isSelected
+                        ? 'bg-amber-500 text-white shadow-xs shadow-amber-500/20'
+                        : 'bg-zinc-100 dark:bg-zinc-800/80 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700'
+                    }`}
+                  >
+                    <span>{cat.label}</span>
+                    <span className={`text-[9px] px-1.5 py-0.2 rounded-full font-mono ${
+                      isSelected ? 'bg-white/25 text-white' : 'bg-zinc-200 dark:bg-zinc-700 text-zinc-500'
+                    }`}>
+                      {count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            /* Horizontal Slider with Left & Right Arrows and Wheel Support */
+            <div className="flex items-center gap-1.5">
               <button
-                key={cat.id}
                 type="button"
-                onClick={() => setSelectedAchievementCategory(cat.id)}
-                className={`flex items-center gap-1.5 px-3 py-1 rounded-xl text-[11px] font-bold whitespace-nowrap transition-all cursor-pointer ${
-                  isSelected
-                    ? 'bg-amber-500 text-white shadow-xs shadow-amber-500/20'
-                    : 'bg-zinc-100 dark:bg-zinc-800/80 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700'
-                }`}
+                onClick={() => scrollCategories('left')}
+                className="p-2 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors shrink-0 shadow-2xs cursor-pointer"
+                title="Rolar para esquerda"
               >
-                <span>{cat.label}</span>
-                <span className={`text-[9px] px-1.5 py-0.2 rounded-full font-mono ${
-                  isSelected ? 'bg-white/25 text-white' : 'bg-zinc-200 dark:bg-zinc-700 text-zinc-500'
-                }`}>
-                  {count}
-                </span>
+                <ChevronLeft className="w-4 h-4" />
               </button>
-            );
-          })}
+
+              <div 
+                ref={categoryScrollRef}
+                onWheel={(e) => {
+                  if (categoryScrollRef.current && e.deltaY !== 0) {
+                    categoryScrollRef.current.scrollLeft += e.deltaY;
+                  }
+                }}
+                className="flex-1 flex items-center gap-1.5 overflow-x-auto py-1 scroll-smooth scrollbar-thin scrollbar-thumb-zinc-300 dark:scrollbar-thumb-zinc-700"
+              >
+                {ACHIEVEMENT_CATEGORIES.map(cat => {
+                  const count = cat.id === 'all' 
+                    ? achievementData.achievements.length 
+                    : achievementData.achievements.filter(a => a.category === cat.id).length;
+                  if (count === 0 && cat.id !== 'all') return null;
+                  const isSelected = selectedAchievementCategory === cat.id;
+
+                  return (
+                    <button
+                      key={cat.id}
+                      type="button"
+                      onClick={() => setSelectedAchievementCategory(cat.id)}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-bold whitespace-nowrap transition-all cursor-pointer shrink-0 ${
+                        isSelected
+                          ? 'bg-amber-500 text-white shadow-xs shadow-amber-500/20'
+                          : 'bg-zinc-100 dark:bg-zinc-800/80 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700'
+                      }`}
+                    >
+                      <span>{cat.label}</span>
+                      <span className={`text-[9px] px-1.5 py-0.2 rounded-full font-mono ${
+                        isSelected ? 'bg-white/25 text-white' : 'bg-zinc-200 dark:bg-zinc-700 text-zinc-500'
+                      }`}>
+                        {count}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <button
+                type="button"
+                onClick={() => scrollCategories('right')}
+                className="p-2 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors shrink-0 shadow-2xs cursor-pointer"
+                title="Rolar para direita"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Achievements Cards List */}
