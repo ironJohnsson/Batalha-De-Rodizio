@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { getTitleByStats } from '../utils/titles';
+import { getRankInfo } from '../utils/titles';
 import { 
   X, 
   User, 
@@ -10,10 +10,10 @@ import {
   Flame, 
   TrendingUp, 
   Award, 
-  Shield, 
   LogOut,
   AlertCircle,
-  Target
+  Target,
+  Swords
 } from 'lucide-react';
 
 export default function ProfileModal({ isOpen, onClose }) {
@@ -40,8 +40,8 @@ export default function ProfileModal({ isOpen, onClose }) {
 
   const handleSaveNickname = async (e) => {
     e.preventDefault();
-    if (!newNick || newNick.trim().length < 2) {
-      setError('O apelido deve ter pelo menos 2 caracteres.');
+    if (!newNick.trim()) {
+      setError('O apelido não pode ficar vazio.');
       return;
     }
     if (newNick.trim() === user.nickname) {
@@ -54,8 +54,8 @@ export default function ProfileModal({ isOpen, onClose }) {
     setSuccess('');
 
     try {
-      const res = await updateNickname(newNick.trim());
-      setSuccess(res.message || 'Apelido atualizado!');
+      await updateNickname(newNick.trim());
+      setSuccess('Apelido atualizado com sucesso!');
       setIsEditing(false);
       setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
@@ -70,43 +70,18 @@ export default function ProfileModal({ isOpen, onClose }) {
     onClose();
   };
 
-  const currentTitle = getTitleByStats(stats?.wins, stats?.total_slices);
-
-  // Next rank calculation
+  // Rank progression & extra career metrics
   const wins = Number(stats?.wins) || 0;
-  const slices = Number(stats?.total_slices) || 0;
+  const totalItems = Number(stats?.total_slices) || 0;
+  const totalBattles = Number(stats?.total_battles) || 0;
 
-  let nextRankInfo = null;
-  if (wins < 5 && slices < 50) {
-    nextRankInfo = {
-      nextTitle: 'Intermediário de Mesa',
-      neededWins: Math.max(0, 5 - wins),
-      neededSlices: Math.max(0, 50 - slices)
-    };
-  } else if (wins < 10 && slices < 100) {
-    nextRankInfo = {
-      nextTitle: 'Veterano do Buffet',
-      neededWins: Math.max(0, 10 - wins),
-      neededSlices: Math.max(0, 100 - slices)
-    };
-  } else if (wins < 20 && slices < 200) {
-    nextRankInfo = {
-      nextTitle: 'Comilão de Elite',
-      neededWins: Math.max(0, 20 - wins),
-      neededSlices: Math.max(0, 200 - slices)
-    };
-  } else if (wins < 35 && slices < 350) {
-    nextRankInfo = {
-      nextTitle: 'Lenda Suprema do Rodízio',
-      neededWins: Math.max(0, 35 - wins),
-      neededSlices: Math.max(0, 350 - slices)
-    };
-  }
+  const rankInfo = getRankInfo(wins, totalItems);
+  const currentTitle = rankInfo.currentRank.title;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs animate-in fade-in duration-200">
       <div 
-        className="w-full max-w-md bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-3xl shadow-2xl overflow-hidden"
+        className="w-full max-w-lg bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-3xl shadow-2xl overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -185,7 +160,7 @@ export default function ProfileModal({ isOpen, onClose }) {
                   </p>
                   <div className="flex items-center gap-1.5 mt-1 text-xs font-semibold text-amber-600 dark:text-amber-400">
                     <Award className="w-3.5 h-3.5 shrink-0" />
-                    <span>{currentTitle}</span>
+                    <span>Nível {rankInfo.currentRank.level} • {currentTitle}</span>
                   </div>
                 </div>
                 <button
@@ -200,74 +175,130 @@ export default function ProfileModal({ isOpen, onClose }) {
             )}
           </div>
 
-          {/* Rank Progression Info */}
-          {nextRankInfo ? (
-            <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-xs">
-              <div className="flex items-center gap-1.5 font-bold text-amber-700 dark:text-amber-400 mb-1">
-                <Target className="w-3.5 h-3.5" />
-                <span>Próxima Patente: {nextRankInfo.nextTitle}</span>
+          {/* Rank Progression Info with visual progress bar */}
+          <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/25 text-xs">
+            <div className="flex items-center justify-between mb-1.5">
+              <div className="flex items-center gap-1.5 font-black text-amber-800 dark:text-amber-300">
+                <Target className="w-4 h-4 text-amber-500 shrink-0" />
+                <span>Patente: {currentTitle}</span>
               </div>
-              <p className="text-zinc-600 dark:text-zinc-300 leading-relaxed">
-                Para subir de nível, ganhe mais <strong className="text-amber-600 dark:text-amber-400">{nextRankInfo.neededWins} {nextRankInfo.neededWins === 1 ? 'partida' : 'partidas'}</strong> OU coma mais <strong className="text-orange-600 dark:text-orange-400">{nextRankInfo.neededSlices} fatias</strong> no total.
-              </p>
+              {!rankInfo.isMaxRank && (
+                <span className="font-mono text-[11px] font-black text-amber-600 dark:text-amber-400">
+                  {rankInfo.progressPercent}%
+                </span>
+              )}
             </div>
-          ) : (
-            <div className="p-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-xs text-emerald-700 dark:text-emerald-400 font-bold flex items-center gap-1.5">
-              <Award className="w-4 h-4" />
-              <span>Parabéns! Você alcançou a patente máxima: Lenda Suprema do Rodízio!</span>
-            </div>
-          )}
 
-          {/* Stats Grid */}
+            {!rankInfo.isMaxRank ? (
+              <>
+                <div className="w-full h-2 rounded-full bg-zinc-200 dark:bg-zinc-800 overflow-hidden mb-2">
+                  <div 
+                    className="h-full bg-gradient-to-r from-amber-500 to-orange-500 rounded-full transition-all duration-500"
+                    style={{ width: `${Math.max(6, rankInfo.progressPercent)}%` }}
+                  />
+                </div>
+                <p className="text-zinc-600 dark:text-zinc-300 leading-relaxed text-[11px]">
+                  Próxima patente: <strong className="text-amber-600 dark:text-amber-400 font-bold">{rankInfo.nextRank.title}</strong>.
+                  <br />
+                  Falta ganhar mais <strong className="text-amber-600 dark:text-amber-400">{rankInfo.neededWins} {rankInfo.neededWins === 1 ? 'partida' : 'partidas'}</strong> OU consumir mais <strong className="text-orange-600 dark:text-orange-400">{rankInfo.neededItems} porções</strong> no total.
+                </p>
+              </>
+            ) : (
+              <div className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-bold text-[11px]">
+                <Award className="w-4 h-4 text-emerald-500 shrink-0" />
+                <span>Patente máxima alcançada! Você é a lenda suprema da mesa.</span>
+              </div>
+            )}
+          </div>
+
+          {/* Stats Grid - 6 Comprehensive Cards */}
           <div>
-            <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 mb-3">
-              Estatísticas da Carreira
-            </h3>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="p-3 rounded-2xl bg-zinc-50 dark:bg-zinc-800/40 border border-zinc-200 dark:border-zinc-800/80">
+            <div className="flex items-center justify-between mb-2.5">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+                Estatísticas da Carreira
+              </h3>
+              <span className="text-[10px] text-zinc-400 font-medium">
+                Consolidado geral
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2.5">
+              {/* Vitórias */}
+              <div className="p-3.5 rounded-2xl bg-zinc-50 dark:bg-zinc-800/40 border border-zinc-200 dark:border-zinc-800/80">
                 <div className="flex items-center gap-1.5 text-xs text-amber-500 font-bold mb-1">
-                  <Trophy className="w-4 h-4" />
-                  <span>Vitórias</span>
+                  <Trophy className="w-4 h-4 shrink-0" />
+                  <span className="truncate">Vitórias</span>
                 </div>
-                <p className="text-xl font-black text-zinc-900 dark:text-zinc-100">
-                  {stats?.wins || 0}
+                <p className="text-2xl font-black text-zinc-900 dark:text-zinc-100 font-mono">
+                  {wins}
                 </p>
+                <span className="text-[10px] text-zinc-400 block mt-0.5">
+                  campeão oficial
+                </span>
               </div>
 
-              <div className="p-3 rounded-2xl bg-zinc-50 dark:bg-zinc-800/40 border border-zinc-200 dark:border-zinc-800/80">
+              {/* Batalhas Disputadas */}
+              <div className="p-3.5 rounded-2xl bg-zinc-50 dark:bg-zinc-800/40 border border-zinc-200 dark:border-zinc-800/80">
+                <div className="flex items-center gap-1.5 text-xs text-emerald-500 font-bold mb-1">
+                  <Swords className="w-4 h-4 shrink-0" />
+                  <span className="truncate">Batalhas</span>
+                </div>
+                <p className="text-2xl font-black text-zinc-900 dark:text-zinc-100 font-mono">
+                  {totalBattles}
+                </p>
+                <span className="text-[10px] text-zinc-400 block mt-0.5">
+                  mesas disputadas
+                </span>
+              </div>
+
+              {/* Total Consumido */}
+              <div className="p-3.5 rounded-2xl bg-zinc-50 dark:bg-zinc-800/40 border border-zinc-200 dark:border-zinc-800/80">
                 <div className="flex items-center gap-1.5 text-xs text-orange-500 font-bold mb-1">
-                  <Flame className="w-4 h-4" />
-                  <span>Total Fatias</span>
+                  <Flame className="w-4 h-4 shrink-0" />
+                  <span className="truncate">Total Porções</span>
                 </div>
-                <p className="text-xl font-black text-zinc-900 dark:text-zinc-100">
-                  {stats?.total_slices || 0}
+                <p className="text-2xl font-black text-zinc-900 dark:text-zinc-100 font-mono">
+                  {totalItems}
                 </p>
+                <span className="text-[10px] text-zinc-400 block mt-0.5">
+                  itens devorados
+                </span>
               </div>
 
-              <div className="p-3 rounded-2xl bg-zinc-50 dark:bg-zinc-800/40 border border-zinc-200 dark:border-zinc-800/80">
+              {/* Média por Batalha */}
+              <div className="p-3.5 rounded-2xl bg-zinc-50 dark:bg-zinc-800/40 border border-zinc-200 dark:border-zinc-800/80">
                 <div className="flex items-center gap-1.5 text-xs text-blue-500 font-bold mb-1">
-                  <TrendingUp className="w-4 h-4" />
-                  <span>Média de Fatias</span>
+                  <TrendingUp className="w-4 h-4 shrink-0" />
+                  <span className="truncate">Média / Batalha</span>
                 </div>
-                <p className="text-xl font-black text-zinc-900 dark:text-zinc-100">
+                <p className="text-2xl font-black text-zinc-900 dark:text-zinc-100 font-mono">
                   {stats?.avg_slices || 0}
                 </p>
+                <span className="text-[10px] text-zinc-400 block mt-0.5">
+                  porções por rodada
+                </span>
               </div>
 
-              <div className="p-3 rounded-2xl bg-zinc-50 dark:bg-zinc-800/40 border border-zinc-200 dark:border-zinc-800/80">
-                <div className="flex items-center gap-1.5 text-xs text-purple-500 font-bold mb-1">
-                  <Award className="w-4 h-4" />
-                  <span>Recorde em 1x</span>
+              {/* Recorde em 1 Mesa (col-span-2) */}
+              <div className="col-span-2 p-3.5 rounded-2xl bg-zinc-50 dark:bg-zinc-800/40 border border-zinc-200 dark:border-zinc-800/80 flex items-center justify-between">
+                <div>
+                  <div className="flex items-center gap-1.5 text-xs text-purple-500 font-bold mb-0.5">
+                    <Award className="w-4 h-4 shrink-0" />
+                    <span>Recorde em 1 Mesa</span>
+                  </div>
+                  <span className="text-[10px] text-zinc-400 block">
+                    Maior consumo registrado em uma única sessão
+                  </span>
                 </div>
-                <p className="text-xl font-black text-zinc-900 dark:text-zinc-100">
-                  {stats?.max_slices || 0} fatias
-                </p>
+                <div className="text-right">
+                  <span className="text-2xl font-black text-zinc-900 dark:text-zinc-100 font-mono">
+                    {stats?.max_slices || 0}
+                  </span>
+                  <span className="text-[10px] text-zinc-500 dark:text-zinc-400 font-semibold block">
+                    porções
+                  </span>
+                </div>
               </div>
-            </div>
-
-            <div className="mt-3 p-3 rounded-2xl bg-zinc-50 dark:bg-zinc-800/40 border border-zinc-200 dark:border-zinc-800/80 flex items-center justify-between text-xs">
-              <span className="text-zinc-500 dark:text-zinc-400 font-medium">Batalhas disputadas:</span>
-              <span className="font-bold text-zinc-900 dark:text-zinc-100">{stats?.total_battles || 0} rodízios</span>
             </div>
           </div>
 

@@ -1,4 +1,4 @@
-import { Pizza, Fish, Sandwich, Beer, Flame, Utensils } from 'lucide-react';
+import { Pizza, Fish, Sandwich, Beer, Flame } from 'lucide-react';
 
 export const RODIZIO_TYPES = [
   {

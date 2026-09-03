@@ -156,15 +156,27 @@ router.get('/me', authMiddleware, async (req, res) => {
     const w = Number(stats.wins) || 0;
     const s = Number(stats.total_slices) || 0;
 
-    let title = 'Iniciante no Rodízio';
-    if (w >= 35 || s >= 350) {
+    let title = 'Iniciante do Rodízio';
+    if (w >= 10 || s >= 200) {
+      title = 'Divindade do Rodízio';
+    } else if (w >= 9 || s >= 180) {
       title = 'Lenda Suprema do Rodízio';
-    } else if (w >= 20 || s >= 200) {
+    } else if (w >= 8 || s >= 160) {
+      title = 'Mito da Mesa';
+    } else if (w >= 7 || s >= 140) {
+      title = 'Lenda do Rodízio';
+    } else if (w >= 6 || s >= 120) {
+      title = 'Titã do Banquete';
+    } else if (w >= 5 || s >= 100) {
+      title = 'Mestre da Degustação';
+    } else if (w >= 4 || s >= 80) {
       title = 'Comilão de Elite';
-    } else if (w >= 10 || s >= 100) {
+    } else if (w >= 3 || s >= 60) {
+      title = 'Guerreiro do Rodízio';
+    } else if (w >= 2 || s >= 40) {
       title = 'Veterano do Buffet';
-    } else if (w >= 5 || s >= 50) {
-      title = 'Intermediário de Mesa';
+    } else if (w >= 1 || s >= 20) {
+      title = 'Aspirante de Mesa';
     }
 
     return res.json({
