@@ -20,7 +20,8 @@ import {
   Star,
   ChevronLeft,
   ChevronRight,
-  LayoutGrid
+  LayoutGrid,
+  ArrowUpDown
 } from 'lucide-react';
 
 export default function ProfileModal({ isOpen, onClose, initialTab = 'general' }) {
@@ -28,6 +29,7 @@ export default function ProfileModal({ isOpen, onClose, initialTab = 'general' }
   const [activeTab, setActiveTab] = useState(initialTab);
   const [selectedRodizio, setSelectedRodizio] = useState('pizza');
   const [selectedAchievementCategory, setSelectedAchievementCategory] = useState('all');
+  const [achievementSortOrder, setAchievementSortOrder] = useState('default');
   const [wrapCategories, setWrapCategories] = useState(false);
   const categoryScrollRef = useRef(null);
   const [typeStats, setTypeStats] = useState(null);
@@ -66,11 +68,33 @@ export default function ProfileModal({ isOpen, onClose, initialTab = 'general' }
   }, [stats, typeStats]);
 
   const filteredAchievements = useMemo(() => {
-    if (selectedAchievementCategory === 'all') {
-      return achievementData.achievements;
+    const RARITY_WEIGHTS = {
+      diamante: 4,
+      ouro: 3,
+      prata: 2,
+      bronze: 1
+    };
+
+    let list = selectedAchievementCategory === 'all'
+      ? [...achievementData.achievements]
+      : achievementData.achievements.filter(a => a.category === selectedAchievementCategory);
+
+    if (achievementSortOrder === 'rarity_desc') {
+      list.sort((a, b) => {
+        const diff = (RARITY_WEIGHTS[b.tier] || 0) - (RARITY_WEIGHTS[a.tier] || 0);
+        if (diff !== 0) return diff;
+        return b.points - a.points;
+      });
+    } else if (achievementSortOrder === 'rarity_asc') {
+      list.sort((a, b) => {
+        const diff = (RARITY_WEIGHTS[a.tier] || 0) - (RARITY_WEIGHTS[b.tier] || 0);
+        if (diff !== 0) return diff;
+        return a.points - b.points;
+      });
     }
-    return achievementData.achievements.filter(a => a.category === selectedAchievementCategory);
-  }, [achievementData, selectedAchievementCategory]);
+
+    return list;
+  }, [achievementData, selectedAchievementCategory, achievementSortOrder]);
 
   if (!isOpen || !user) return null;
 
@@ -409,6 +433,58 @@ export default function ProfileModal({ isOpen, onClose, initialTab = 'general' }
               </button>
             </div>
           )}
+        </div>
+
+        {/* Sort by Rarity Bar & Counter */}
+        <div className="flex items-center justify-between pt-1 pb-0.5 text-xs">
+          <span className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-400">
+            {filteredAchievements.length} {filteredAchievements.length === 1 ? 'missão' : 'missões'}
+          </span>
+
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] font-bold text-zinc-400 flex items-center gap-1">
+              <ArrowUpDown className="w-3 h-3 text-amber-500 shrink-0" />
+              <span>Raridade:</span>
+            </span>
+
+            <div className="flex items-center p-0.5 rounded-xl bg-zinc-100 dark:bg-zinc-800 text-[10px] font-bold">
+              <button
+                type="button"
+                onClick={() => setAchievementSortOrder('default')}
+                className={`px-2 py-0.5 rounded-lg transition-all cursor-pointer ${
+                  achievementSortOrder === 'default'
+                    ? 'bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 shadow-xs'
+                    : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200'
+                }`}
+              >
+                Padrão
+              </button>
+              <button
+                type="button"
+                onClick={() => setAchievementSortOrder('rarity_desc')}
+                className={`px-2 py-0.5 rounded-lg transition-all cursor-pointer ${
+                  achievementSortOrder === 'rarity_desc'
+                    ? 'bg-white dark:bg-zinc-900 text-amber-600 dark:text-amber-400 shadow-xs'
+                    : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200'
+                }`}
+                title="Mais Raras primeiro (Diamante -> Ouro -> Prata -> Bronze)"
+              >
+                Mais Raras
+              </button>
+              <button
+                type="button"
+                onClick={() => setAchievementSortOrder('rarity_asc')}
+                className={`px-2 py-0.5 rounded-lg transition-all cursor-pointer ${
+                  achievementSortOrder === 'rarity_asc'
+                    ? 'bg-white dark:bg-zinc-900 text-amber-600 dark:text-amber-400 shadow-xs'
+                    : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200'
+                }`}
+                title="Mais Comuns primeiro (Bronze -> Prata -> Ouro -> Diamante)"
+              >
+                Mais Comuns
+              </button>
+            </div>
+          </div>
         </div>
 
         {/* Achievements Cards List */}
