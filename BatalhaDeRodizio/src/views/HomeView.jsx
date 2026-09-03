@@ -728,7 +728,19 @@ export default function HomeView({
                             <div className={`p-1.5 rounded-xl ${isSelected ? type.accentBg : 'bg-zinc-200/60 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400'}`}>
                               <Icon className="w-4 h-4" />
                             </div>
-                            <span className="text-base">{type.emoji}</span>
+                            {isSelected && (
+                              <span className={`h-2 w-2 rounded-full ${
+                                type.id === 'churrasco'
+                                  ? 'bg-red-500'
+                                  : type.id === 'japones'
+                                  ? 'bg-rose-500'
+                                  : type.id === 'hamburguer'
+                                  ? 'bg-amber-500'
+                                  : type.id === 'bebida'
+                                  ? 'bg-sky-500'
+                                  : 'bg-orange-500'
+                              }`} />
+                            )}
                           </div>
                           <span className="text-xs font-black text-zinc-900 dark:text-white">
                             {type.label}
