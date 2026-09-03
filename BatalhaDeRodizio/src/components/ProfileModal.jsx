@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { getRankInfo } from '../utils/titles';
 import { RODIZIO_TYPES, getRodizioConfig, getUnitLabel } from '../utils/rodizioTypes';
+import { ACHIEVEMENT_CATEGORIES, calculateAchievements } from '../utils/achievements';
 import { apiRequest } from '../services/api';
 import { 
   X, 
@@ -15,13 +16,15 @@ import {
   LogOut, 
   AlertCircle, 
   Target, 
-  Swords
+  Swords,
+  Star
 } from 'lucide-react';
 
 export default function ProfileModal({ isOpen, onClose, initialTab = 'general' }) {
   const { user, stats, updateNickname, logout } = useAuth();
   const [activeTab, setActiveTab] = useState(initialTab);
   const [selectedRodizio, setSelectedRodizio] = useState('pizza');
+  const [selectedAchievementCategory, setSelectedAchievementCategory] = useState('all');
   const [typeStats, setTypeStats] = useState(null);
   const [loadingTypeStats, setLoadingTypeStats] = useState(false);
 
@@ -43,6 +46,26 @@ export default function ProfileModal({ isOpen, onClose, initialTab = 'general' }
         .finally(() => setLoadingTypeStats(false));
     }
   }, [isOpen, initialTab]);
+
+  // Overall rank progression & general career metrics
+  const wins = Number(stats?.wins) || 0;
+  const totalItems = Number(stats?.total_slices) || 0;
+  const totalBattles = Number(stats?.total_battles) || 0;
+
+  const rankInfo = getRankInfo(wins, totalItems);
+  const currentTitle = rankInfo.currentRank.title;
+
+  // Gamified achievements calculation
+  const achievementData = useMemo(() => {
+    return calculateAchievements(stats, typeStats, []);
+  }, [stats, typeStats]);
+
+  const filteredAchievements = useMemo(() => {
+    if (selectedAchievementCategory === 'all') {
+      return achievementData.achievements;
+    }
+    return achievementData.achievements.filter(a => a.category === selectedAchievementCategory);
+  }, [achievementData, selectedAchievementCategory]);
 
   if (!isOpen || !user) return null;
 
@@ -89,14 +112,6 @@ export default function ProfileModal({ isOpen, onClose, initialTab = 'general' }
     logout();
     onClose();
   };
-
-  // Overall rank progression & general career metrics
-  const wins = Number(stats?.wins) || 0;
-  const totalItems = Number(stats?.total_slices) || 0;
-  const totalBattles = Number(stats?.total_battles) || 0;
-
-  const rankInfo = getRankInfo(wins, totalItems);
-  const currentTitle = rankInfo.currentRank.title;
 
   const renderTypeContent = () => {
     if (loadingTypeStats && !typeStats) {
@@ -236,6 +251,156 @@ export default function ProfileModal({ isOpen, onClose, initialTab = 'general' }
     );
   };
 
+  const renderAchievementsContent = () => {
+    return (
+      <div className="space-y-3.5">
+        {/* Global Progress Header Banner */}
+        <div className="p-4 rounded-2xl bg-gradient-to-br from-amber-500/10 via-orange-500/5 to-transparent border border-amber-500/25">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2.5">
+              <div className="p-2 rounded-xl bg-amber-500/20 text-amber-600 dark:text-amber-400">
+                <Trophy className="w-4 h-4" />
+              </div>
+              <div>
+                <h4 className="text-xs font-black text-zinc-900 dark:text-zinc-100">
+                  Progresso das Missões
+                </h4>
+                <span className="text-[10px] text-zinc-500 dark:text-zinc-400">
+                  {achievementData.unlockedCount} de {achievementData.totalCount} conquistas alcançadas
+                </span>
+              </div>
+            </div>
+
+            <div className="text-right">
+              <div className="flex items-center justify-end gap-1 text-xs font-black text-amber-600 dark:text-amber-400">
+                <Star className="w-3.5 h-3.5 fill-amber-500 text-amber-500" />
+                <span>{achievementData.unlockedPoints} / {achievementData.totalPoints} pts</span>
+              </div>
+              <span className="text-[10px] font-mono text-zinc-400 font-bold block">
+                {achievementData.percentComplete}% concluído
+              </span>
+            </div>
+          </div>
+
+          <div className="w-full h-2 rounded-full bg-zinc-200 dark:bg-zinc-800 overflow-hidden">
+            <div 
+              className="h-full bg-gradient-to-r from-amber-500 to-orange-500 rounded-full transition-all duration-500"
+              style={{ width: `${Math.max(4, achievementData.percentComplete)}%` }}
+            />
+          </div>
+        </div>
+
+        {/* Category Filter Pills */}
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+          {ACHIEVEMENT_CATEGORIES.map(cat => {
+            const count = cat.id === 'all' 
+              ? achievementData.achievements.length 
+              : achievementData.achievements.filter(a => a.category === cat.id).length;
+            if (count === 0 && cat.id !== 'all') return null;
+            const isSelected = selectedAchievementCategory === cat.id;
+
+            return (
+              <button
+                key={cat.id}
+                type="button"
+                onClick={() => setSelectedAchievementCategory(cat.id)}
+                className={`flex items-center gap-1.5 px-3 py-1 rounded-xl text-[11px] font-bold whitespace-nowrap transition-all cursor-pointer ${
+                  isSelected
+                    ? 'bg-amber-500 text-white shadow-xs shadow-amber-500/20'
+                    : 'bg-zinc-100 dark:bg-zinc-800/80 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700'
+                }`}
+              >
+                <span>{cat.label}</span>
+                <span className={`text-[9px] px-1.5 py-0.2 rounded-full font-mono ${
+                  isSelected ? 'bg-white/25 text-white' : 'bg-zinc-200 dark:bg-zinc-700 text-zinc-500'
+                }`}>
+                  {count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Achievements Cards List */}
+        <div className="space-y-2 max-h-[380px] overflow-y-auto pr-1">
+          {filteredAchievements.map(ach => {
+            const Icon = ach.icon;
+            const tier = ach.tierConfig;
+
+            return (
+              <div 
+                key={ach.id}
+                className={`p-3 rounded-2xl border transition-all ${
+                  ach.isUnlocked
+                    ? 'bg-zinc-50/90 dark:bg-zinc-800/50 border-zinc-200 dark:border-zinc-700/80 shadow-2xs'
+                    : 'bg-zinc-50/40 dark:bg-zinc-900/30 border-dashed border-zinc-200 dark:border-zinc-800 opacity-85'
+                }`}
+              >
+                <div className="flex items-start gap-3">
+                  {/* Icon with Tier indicator */}
+                  <div className={`p-2.5 rounded-2xl ${ach.isUnlocked ? tier.iconBg : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-400'} shrink-0 relative`}>
+                    <Icon className="w-5 h-5" />
+                    {ach.isUnlocked && (
+                      <div className="absolute -bottom-1 -right-1 p-0.5 rounded-full bg-emerald-500 text-white shadow-xs">
+                        <Check className="w-2.5 h-2.5 stroke-[3]" />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Details */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-2 mb-0.5">
+                      <div className="flex items-center gap-1.5 truncate">
+                        <h5 className={`text-xs font-black truncate ${ach.isUnlocked ? 'text-zinc-900 dark:text-zinc-100' : 'text-zinc-600 dark:text-zinc-400'}`}>
+                          {ach.title}
+                        </h5>
+                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full border ${tier.badgeBg}`}>
+                          {tier.name}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-1 shrink-0">
+                        <span className="text-[10px] font-mono font-bold text-amber-600 dark:text-amber-400">
+                          +{ach.points} pts
+                        </span>
+                      </div>
+                    </div>
+
+                    <p className="text-[11px] text-zinc-500 dark:text-zinc-400 leading-tight mb-2">
+                      {ach.description}
+                    </p>
+
+                    {/* Progress Bar & Value */}
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between text-[10px] text-zinc-400 font-medium">
+                        <span>
+                          {ach.currentValue} / {ach.target} {ach.unit}
+                        </span>
+                        <span className="font-mono font-bold">
+                          {ach.isUnlocked ? 'Desbloqueado' : `${ach.progressPercent}%`}
+                        </span>
+                      </div>
+                      <div className="w-full h-1.5 rounded-full bg-zinc-200 dark:bg-zinc-800 overflow-hidden">
+                        <div 
+                          className={`h-full rounded-full transition-all duration-500 ${
+                            ach.isUnlocked 
+                              ? 'bg-emerald-500' 
+                              : 'bg-amber-500'
+                          }`}
+                          style={{ width: `${Math.max(ach.currentValue > 0 ? 5 : 0, ach.progressPercent)}%` }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs animate-in fade-in duration-200">
       <div 
@@ -369,11 +534,11 @@ export default function ProfileModal({ isOpen, onClose, initialTab = 'general' }
             )}
           </div>
 
-          {/* Stats Section with Tab Switcher */}
+          {/* Stats Section with 3 Tabs: Geral, Por Rodízio, Conquistas */}
           <div>
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-                Estatísticas
+                Estatísticas & Missões
               </h3>
               
               {/* Tab Selector Pill */}
@@ -381,18 +546,18 @@ export default function ProfileModal({ isOpen, onClose, initialTab = 'general' }
                 <button
                   type="button"
                   onClick={() => setActiveTab('general')}
-                  className={`px-3 py-1 rounded-lg transition-all cursor-pointer ${
+                  className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
                     activeTab === 'general'
                       ? 'bg-white dark:bg-zinc-900 text-zinc-900 dark:text-white shadow-xs'
                       : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200'
                   }`}
                 >
-                  Visão Geral
+                  Geral
                 </button>
                 <button
                   type="button"
                   onClick={() => setActiveTab('by-type')}
-                  className={`px-3 py-1 rounded-lg transition-all cursor-pointer ${
+                  className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
                     activeTab === 'by-type'
                       ? 'bg-white dark:bg-zinc-900 text-orange-600 dark:text-orange-400 shadow-xs'
                       : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200'
@@ -400,11 +565,29 @@ export default function ProfileModal({ isOpen, onClose, initialTab = 'general' }
                 >
                   Por Rodízio
                 </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('conquistas')}
+                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
+                    activeTab === 'conquistas'
+                      ? 'bg-white dark:bg-zinc-900 text-amber-600 dark:text-amber-400 shadow-xs'
+                      : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200'
+                  }`}
+                >
+                  <span>Conquistas</span>
+                  <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
+                    activeTab === 'conquistas'
+                      ? 'bg-amber-500/20 text-amber-600 dark:text-amber-400'
+                      : 'bg-zinc-200 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-300'
+                  }`}>
+                    {achievementData.unlockedCount}/{achievementData.totalCount}
+                  </span>
+                </button>
               </div>
             </div>
 
             {/* General Tab */}
-            {activeTab === 'general' ? (
+            {activeTab === 'general' && (
               <div className="grid grid-cols-2 gap-2.5">
                 {/* Vitórias */}
                 <div className="p-3.5 rounded-2xl bg-zinc-50 dark:bg-zinc-800/40 border border-zinc-200 dark:border-zinc-800/80">
@@ -483,8 +666,10 @@ export default function ProfileModal({ isOpen, onClose, initialTab = 'general' }
                   </div>
                 </div>
               </div>
-            ) : (
-              /* By Rodizio Type Detailed Tab */
+            )}
+
+            {/* By Rodizio Type Detailed Tab */}
+            {activeTab === 'by-type' && (
               <div className="space-y-3">
                 {/* Rodízio Type Buttons Selector */}
                 <div className="grid grid-cols-5 gap-1.5">
@@ -516,6 +701,9 @@ export default function ProfileModal({ isOpen, onClose, initialTab = 'general' }
                 {renderTypeContent()}
               </div>
             )}
+
+            {/* Achievements & Missions Tab */}
+            {activeTab === 'conquistas' && renderAchievementsContent()}
           </div>
 
           {/* Footer Actions */}

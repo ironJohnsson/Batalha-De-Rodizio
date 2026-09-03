@@ -24,8 +24,10 @@ import {
   KeyRound,
   RefreshCw,
   Radio,
-  Swords
+  Swords,
+  ChevronRight
 } from 'lucide-react';
+import { calculateAchievements } from '../utils/achievements';
 
 export default function HomeView({ 
   onCreateRoom, 
@@ -304,6 +306,7 @@ export default function HomeView({
   const userBattles = Number(stats?.total_battles) || 0;
   const rankInfo = isAuthenticated ? getRankInfo(userWins, userItems) : null;
   const currentTitle = rankInfo ? rankInfo.currentRank.title : (isAuthenticated ? getTitleByStats(userWins, userItems) : '');
+  const homeAchievements = isAuthenticated ? calculateAchievements(stats, null, []) : null;
 
   const filteredRooms = activeRooms.filter(r => 
     r.name.toLowerCase().includes(roomFilter.toLowerCase()) ||
@@ -1033,8 +1036,40 @@ export default function HomeView({
                 </div>
               </div>
 
+              {/* Achievements Summary Banner */}
+              {homeAchievements && (
+                <div 
+                  onClick={() => onOpenProfile('conquistas')}
+                  className="mt-3 p-3 rounded-2xl bg-amber-500/10 hover:bg-amber-500/15 border border-amber-500/25 flex items-center justify-between cursor-pointer transition-all group"
+                  title="Ver todas as Missões e Conquistas"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-1.5 rounded-xl bg-amber-500/20 text-amber-600 dark:text-amber-400 shrink-0 group-hover:scale-105 transition-transform">
+                      <Trophy className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs font-black text-amber-900 dark:text-amber-200 block leading-tight">
+                          Missões & Conquistas
+                        </span>
+                        <span className="text-[10px] font-mono font-bold px-1.5 py-0.2 rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-300">
+                          {homeAchievements.unlockedPoints} pts
+                        </span>
+                      </div>
+                      <span className="text-[10px] text-zinc-500 dark:text-zinc-400 font-medium">
+                        {homeAchievements.unlockedCount} de {homeAchievements.totalCount} conquistas desbloqueadas
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1 text-[11px] font-bold text-amber-600 dark:text-amber-400 shrink-0">
+                    <span>Ver</span>
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </div>
+                </div>
+              )}
+
               {/* View Profile Actions */}
-              <div className="mt-4 flex flex-col sm:flex-row gap-2">
+              <div className="mt-3 flex flex-col sm:flex-row gap-2">
                 <button
                   type="button"
                   onClick={() => onOpenProfile('by-type')}
