@@ -16,8 +16,14 @@ export default function App() {
   const [isConnected, setIsConnected] = useState(socket.connected);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
+  const [profileTab, setProfileTab] = useState('general');
   const [showPodium, setShowPodium] = useState(false);
   const [initialCode, setInitialCode] = useState('');
+
+  const handleOpenProfile = (tab = 'general') => {
+    setProfileTab(typeof tab === 'string' ? tab : 'general');
+    setShowProfileModal(true);
+  };
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -162,7 +168,7 @@ export default function App() {
       {/* Navigation Header */}
       <Navbar
         onOpenAuth={() => setShowAuthModal(true)}
-        onOpenProfile={() => setShowProfileModal(true)}
+        onOpenProfile={() => handleOpenProfile('general')}
         onNavigateHome={() => {
           if (currentRoom) {
             if (window.confirm('Deseja realmente sair da sala atual e voltar ao início?')) {
@@ -196,7 +202,7 @@ export default function App() {
             onCreateRoom={handleCreateRoom}
             onJoinRoom={handleJoinRoom}
             onOpenAuth={() => setShowAuthModal(true)}
-            onOpenProfile={() => setShowProfileModal(true)}
+            onOpenProfile={handleOpenProfile}
             initialCode={initialCode}
           />
         )}
@@ -266,6 +272,7 @@ export default function App() {
       <ProfileModal
         isOpen={showProfileModal}
         onClose={() => setShowProfileModal(false)}
+        initialTab={profileTab}
       />
 
       {/* Podium Modal */}

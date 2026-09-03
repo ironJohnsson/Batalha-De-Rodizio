@@ -1033,15 +1033,25 @@ export default function HomeView({
                 </div>
               </div>
 
-              {/* View / Edit Profile Button */}
-              <button
-                type="button"
-                onClick={onOpenProfile}
-                className="mt-4 w-full flex items-center justify-center gap-2 rounded-2xl bg-amber-500 hover:bg-amber-600 text-white py-3 text-xs font-bold transition-all shadow-md shadow-amber-500/20 cursor-pointer"
-              >
-                <Edit3 className="h-4 w-4" />
-                <span>Editar Perfil e Alterar Apelido</span>
-              </button>
+              {/* View Profile Actions */}
+              <div className="mt-4 flex flex-col sm:flex-row gap-2">
+                <button
+                  type="button"
+                  onClick={() => onOpenProfile('by-type')}
+                  className="flex-1 flex items-center justify-center gap-1.5 rounded-2xl bg-orange-500/10 hover:bg-orange-500/20 text-orange-600 dark:text-orange-400 border border-orange-500/20 py-3 text-xs font-bold transition-all cursor-pointer"
+                >
+                  <Flame className="h-3.5 w-3.5" />
+                  <span>Ver por Tipo de Rodízio</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onOpenProfile('general')}
+                  className="flex items-center justify-center gap-1.5 rounded-2xl bg-amber-500 hover:bg-amber-600 text-white px-4 py-3 text-xs font-bold transition-all shadow-md shadow-amber-500/20 cursor-pointer"
+                >
+                  <Edit3 className="h-3.5 w-3.5" />
+                  <span>Editar Perfil</span>
+                </button>
+              </div>
             </div>
           ) : (
             <div className="rounded-3xl border border-orange-500/20 bg-gradient-to-br from-orange-500/10 via-amber-500/5 to-transparent p-6 shadow-xl dark:border-orange-500/20 dark:bg-zinc-900">
