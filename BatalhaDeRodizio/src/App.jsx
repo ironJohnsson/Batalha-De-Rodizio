@@ -9,6 +9,37 @@ import HomeView from './views/HomeView';
 import RoomView from './views/RoomView';
 import { AlertCircle, Utensils } from 'lucide-react';
 
+const SESSION_KEY = 'contarodizio_active_session';
+
+function saveRoomSession(code, nickname, userId, roomPassword = '') {
+  if (!code) return;
+  try {
+    localStorage.setItem(SESSION_KEY, JSON.stringify({
+      code: code.toUpperCase().trim(),
+      nickname: nickname || '',
+      userId: userId || null,
+      roomPassword: roomPassword || ''
+    }));
+  } catch (e) {
+    console.error('Erro ao salvar sessão local da sala:', e);
+  }
+}
+
+function getRoomSession() {
+  try {
+    const raw = localStorage.getItem(SESSION_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+function clearRoomSession() {
+  try {
+    localStorage.removeItem(SESSION_KEY);
+  } catch (e) {}
+}
+
 export default function App() {
   const { user, refreshProfile } = useAuth();
   const [currentRoom, setCurrentRoom] = useState(null);
@@ -33,15 +64,38 @@ export default function App() {
     }
   }, []);
 
+  // Reconexão transparente à sala ativa caso o celular tenha apagado a tela ou fechado a aba
+  const restoreActiveSession = React.useCallback(() => {
+    const session = getRoomSession();
+    if (!session || !session.code || !socket.connected) return;
+
+    socket.emit('room:join', {
+      code: session.code,
+      userId: user?.id || session.userId || null,
+      nickname: user?.nickname || session.nickname,
+      roomPassword: session.roomPassword || ''
+    }, (response) => {
+      if (response && response.success) {
+        setCurrentRoom(response.room);
+      } else {
+        if (response?.error && (response.error.includes('não encontrada') || response.error.includes('finalizada'))) {
+          clearRoomSession();
+          setCurrentRoom(null);
+        }
+      }
+    });
+  }, [user]);
+
   useEffect(() => {
     function onConnect() {
       console.log('Conectado ao servidor via Socket.IO:', socket.id);
       setSocketId(socket.id);
       setIsConnected(true);
+      restoreActiveSession();
     }
 
     function onDisconnect() {
-      console.warn('Socket.IO desconectado.');
+      console.warn('Socket.IO desconectado temporariamente.');
       setIsConnected(false);
     }
 
@@ -56,6 +110,7 @@ export default function App() {
     }
 
     function onRoomClosed(data) {
+      clearRoomSession();
       alert(data?.message || 'A sala foi encerrada pois todos os participantes saíram.');
       setCurrentRoom(null);
       setShowPodium(false);
@@ -71,6 +126,7 @@ export default function App() {
     if (socket.connected) {
       setSocketId(socket.id);
       setIsConnected(true);
+      restoreActiveSession();
     }
 
     return () => {
@@ -80,7 +136,27 @@ export default function App() {
       socket.off('room:finished', onRoomFinished);
       socket.off('room:closed', onRoomClosed);
     };
-  }, [refreshProfile]);
+  }, [refreshProfile, restoreActiveSession]);
+
+  // Restaura automaticamente assim que a tela do celular acende ou a aba volta a ficar visível
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        if (!socket.connected) {
+          socket.connect();
+        } else {
+          restoreActiveSession();
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleVisibilityChange);
+    };
+  }, [restoreActiveSession]);
 
   const handleCreateRoom = ({ name, hostUserId, hostNickname, type, password }) => {
     if (!socket.connected) {
@@ -90,6 +166,7 @@ export default function App() {
 
     socket.emit('room:create', { name, hostUserId, hostNickname, type, password }, (response) => {
       if (response && response.success) {
+        saveRoomSession(response.room.code, hostNickname, hostUserId, password);
         setCurrentRoom(response.room);
       } else {
         alert(response?.error || 'Erro ao criar sala.');
@@ -105,6 +182,7 @@ export default function App() {
 
     socket.emit('room:join', { code, userId, nickname, roomPassword }, (response) => {
       if (response && response.success) {
+        saveRoomSession(response.room.code, nickname, userId, roomPassword);
         setCurrentRoom(response.room);
         if (typeof callback === 'function') callback({ success: true, room: response.room });
       } else {
@@ -146,8 +224,13 @@ export default function App() {
   const handleLeaveRoom = () => {
     if (window.confirm('Tem certeza que deseja sair da sala atual?')) {
       if (currentRoom) {
-        socket.emit('room:leave', { code: currentRoom.code });
+        socket.emit('room:leave', { 
+          code: currentRoom.code,
+          userId: user?.id || null,
+          nickname: user?.nickname || null
+        });
       }
+      clearRoomSession();
       setCurrentRoom(null);
       setShowPodium(false);
       window.history.replaceState({}, document.title, window.location.pathname);
@@ -156,8 +239,13 @@ export default function App() {
 
   const handleBackHomeFromPodium = () => {
     if (currentRoom) {
-      socket.emit('room:leave', { code: currentRoom.code });
+      socket.emit('room:leave', { 
+        code: currentRoom.code,
+        userId: user?.id || null,
+        nickname: user?.nickname || null
+      });
     }
+    clearRoomSession();
     setShowPodium(false);
     setCurrentRoom(null);
     window.history.replaceState({}, document.title, window.location.pathname);
