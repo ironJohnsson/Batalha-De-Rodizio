@@ -12,15 +12,17 @@ function generateRoomCode() {
   return code;
 }
 
-async function createRoom({ name, hostUserId, hostNickname, hostSocketId, password, type }) {
+async function createRoom({ name, hostUserId, hostNickname, hostSocketId, type, password }) {
   let code = generateRoomCode();
   while (activeRooms.has(code)) {
     code = generateRoomCode();
   }
 
   const roomName = name && name.trim() ? name.trim() : `Mesa ${code}`;
+  const roomType = type && ['churrasco', 'pizza', 'outro'].includes(type.toLowerCase())
+    ? type.toLowerCase()
+    : 'pizza';
   const roomPass = password && password.trim() ? password.trim() : null;
-  const roomType = type && typeof type === 'string' ? type.toLowerCase().trim() : 'pizza';
 
   const roomData = {
     code,
@@ -33,6 +35,7 @@ async function createRoom({ name, hostUserId, hostNickname, hostSocketId, passwo
     status: 'active',
     winnerNickname: null,
     createdAt: new Date().toISOString(),
+    abandonTimeout: null,
     participants: new Map(),
     logs: [
       {
@@ -47,6 +50,8 @@ async function createRoom({ name, hostUserId, hostNickname, hostSocketId, passwo
   // Host joins as first participant
   roomData.participants.set(hostSocketId, {
     socketId: hostSocketId,
+    connected: true,
+    disconnectedAt: null,
     userId: hostUserId || null,
     nickname: hostNickname || 'Anfitrião',
     slices: 0,
@@ -96,8 +101,19 @@ async function joinRoom({ code, socketId, userId, nickname, roomPassword }) {
     return { error: 'Esta competição já foi finalizada.' };
   }
 
-  // Room Password Check: if room is password protected and user is not host
-  if (room.password) {
+  const cleanNickname = nickname.trim();
+
+  // Check if participant with same nickname or userId exists in this room (reconnection)
+  let existingEntry = null;
+  for (const [sId, p] of room.participants.entries()) {
+    if ((userId && p.userId === userId) || p.nickname.toLowerCase() === cleanNickname.toLowerCase()) {
+      existingEntry = { oldSocketId: sId, participant: p };
+      break;
+    }
+  }
+
+  // Room Password Check: only enforce for NEW participants
+  if (room.password && !existingEntry) {
     const isHost = (userId && room.hostUserId === userId) || (room.hostSocketId === socketId);
     if (!isHost) {
       if (!roomPassword || roomPassword.trim() !== room.password) {
@@ -109,10 +125,8 @@ async function joinRoom({ code, socketId, userId, nickname, roomPassword }) {
     }
   }
 
-  const cleanNickname = nickname.trim();
-
-  // ANTI-IMPERSONATION: If user is not authenticated, verify nickname is not registered to an existing account
-  if (!userId) {
+  // ANTI-IMPERSONATION: If user is not authenticated and not reconnecting, verify nickname is not registered
+  if (!userId && !existingEntry) {
     try {
       const existingUser = await db.execute({
         sql: 'SELECT id FROM users WHERE nickname = ? COLLATE NOCASE',
@@ -128,20 +142,20 @@ async function joinRoom({ code, socketId, userId, nickname, roomPassword }) {
     }
   }
 
-  // Check if participant with same nickname exists in this room (reconnection)
-  let existingEntry = null;
-  for (const [sId, p] of room.participants.entries()) {
-    if ((userId && p.userId === userId) || p.nickname.toLowerCase() === cleanNickname.toLowerCase()) {
-      existingEntry = { oldSocketId: sId, participant: p };
-      break;
-    }
+  // Cancel any pending room abandon timeout because a participant is active/reconnecting
+  if (room.abandonTimeout) {
+    clearTimeout(room.abandonTimeout);
+    room.abandonTimeout = null;
   }
 
   if (existingEntry) {
+    // Reconnection: preserve all existing slices and history!
     room.participants.delete(existingEntry.oldSocketId);
     room.participants.set(socketId, {
       ...existingEntry.participant,
       socketId,
+      connected: true,
+      disconnectedAt: null,
       nickname: cleanNickname,
       userId: userId || existingEntry.participant.userId
     });
@@ -150,8 +164,11 @@ async function joinRoom({ code, socketId, userId, nickname, roomPassword }) {
       room.hostSocketId = socketId;
     }
   } else {
+    // New Participant
     room.participants.set(socketId, {
       socketId,
+      connected: true,
+      disconnectedAt: null,
       userId: userId || null,
       nickname: cleanNickname,
       slices: 0,
@@ -185,11 +202,14 @@ function updateSlices({ code, socketId, delta }) {
 
   participant.slices = newSlices;
 
+  const isChurrasco = (room.type || '').toLowerCase() === 'churrasco';
+  const unitName = isChurrasco ? 'pedaço' : 'fatia';
+
   let logText = '';
   if (delta > 0) {
-    logText = `${participant.nickname} mandou pra dentro a fatia nº ${newSlices}!`;
+    logText = `${participant.nickname} mandou pra dentro o ${unitName} nº ${newSlices}!`;
   } else {
-    logText = `${participant.nickname} desfez 1 fatia (Total: ${newSlices}).`;
+    logText = `${participant.nickname} desfez 1 ${unitName} (Total: ${newSlices}).`;
   }
 
   room.logs.unshift({
@@ -219,6 +239,11 @@ async function finishRoom({ code, socketId, requesterUserId }) {
     return { error: 'Apenas o criador/dono da sala tem permissão para finalizar a competição.' };
   }
 
+  if (room.abandonTimeout) {
+    clearTimeout(room.abandonTimeout);
+    room.abandonTimeout = null;
+  }
+
   const participantsList = Array.from(room.participants.values()).sort((a, b) => b.slices - a.slices);
   const maxSlices = participantsList.length > 0 ? participantsList[0].slices : 0;
   const topScorers = participantsList.filter(p => p.slices === maxSlices && maxSlices > 0);
@@ -234,9 +259,12 @@ async function finishRoom({ code, socketId, requesterUserId }) {
   room.winnerNickname = winnerName;
   room.finishedAt = new Date().toISOString();
 
+  const isChurrasco = (room.type || '').toLowerCase() === 'churrasco';
+  const unitPlural = isChurrasco ? 'pedaços' : 'fatias';
+
   room.logs.unshift({
     id: Date.now(),
-    text: `Competição finalizada! Campeão: ${winnerName} com ${maxSlices} fatias!`,
+    text: `Competição finalizada! Campeão: ${winnerName} com ${maxSlices} ${unitPlural}!`,
     type: 'finish',
     time: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
   });
@@ -287,6 +315,32 @@ function handleDisconnect(socketId) {
   for (const [code, room] of activeRooms.entries()) {
     if (room.participants.has(socketId)) {
       const p = room.participants.get(socketId);
+      p.connected = false;
+      p.disconnectedAt = Date.now();
+
+      // Check if all participants in this room are currently offline
+      const anyOnline = Array.from(room.participants.values()).some(part => part.connected !== false);
+      if (!anyOnline) {
+        // If everyone locked their screen or disconnected, keep room alive for 30 minutes
+        if (!room.abandonTimeout) {
+          room.abandonTimeout = setTimeout(async () => {
+            const currentRoom = activeRooms.get(code);
+            if (!currentRoom) return;
+            const stillOffline = Array.from(currentRoom.participants.values()).every(part => part.connected === false);
+            if (stillOffline) {
+              activeRooms.delete(code);
+              console.log(`[Sala Inativa] Mesa ${code} encerrada após 30 minutos de inatividade total.`);
+              try {
+                await db.execute({
+                  sql: `UPDATE rooms SET status = 'closed', finished_at = CURRENT_TIMESTAMP WHERE code = ? AND status = 'active'`,
+                  args: [code]
+                });
+              } catch (e) {}
+            }
+          }, 30 * 60 * 1000); // 30 minutes grace period for mobile screens
+        }
+      }
+
       return { code, nickname: p.nickname, room: formatRoomPayload(room) };
     }
   }
@@ -300,6 +354,7 @@ function formatRoomPayload(room) {
       userId: p.userId,
       nickname: p.nickname,
       slices: p.slices,
+      connected: p.connected !== false,
       joinedAt: p.joinedAt
     }))
     .sort((a, b) => b.slices - a.slices);
@@ -321,7 +376,7 @@ function formatRoomPayload(room) {
   };
 }
 
-async function leaveRoom({ code, socketId }) {
+async function leaveRoom({ code, socketId, userId, nickname }) {
   let targetCode = code ? code.toUpperCase().trim() : null;
   let room = targetCode ? activeRooms.get(targetCode) : null;
 
@@ -337,14 +392,32 @@ async function leaveRoom({ code, socketId }) {
 
   if (!room || !targetCode) return null;
 
-  const participant = room.participants.get(socketId);
-  if (!participant) return null;
+  let pKey = null;
+  let participant = null;
+  if (room.participants.has(socketId)) {
+    pKey = socketId;
+    participant = room.participants.get(socketId);
+  } else {
+    for (const [sId, p] of room.participants.entries()) {
+      if ((userId && p.userId === userId) || (nickname && p.nickname.toLowerCase() === nickname.toLowerCase())) {
+        pKey = sId;
+        participant = p;
+        break;
+      }
+    }
+  }
+
+  if (!participant || !pKey) return null;
 
   const leavingNick = participant.nickname;
-  room.participants.delete(socketId);
+  room.participants.delete(pKey);
 
-  // If room is now empty, delete room
+  // If room is now empty (everyone left explicitly), delete room immediately
   if (room.participants.size === 0) {
+    if (room.abandonTimeout) {
+      clearTimeout(room.abandonTimeout);
+      room.abandonTimeout = null;
+    }
     activeRooms.delete(targetCode);
     console.log(`[Sala Encerrada] Todos saíram da sala ${targetCode}. Removida das ativas.`);
     try {
@@ -364,7 +437,7 @@ async function leaveRoom({ code, socketId }) {
 
   // If host left, pass host to the next participant
   let newHost = null;
-  if (room.hostSocketId === socketId) {
+  if (room.hostSocketId === pKey || (userId && room.hostUserId === userId)) {
     const nextParticipant = room.participants.values().next().value;
     room.hostSocketId = nextParticipant.socketId;
     room.hostNickname = nextParticipant.nickname;

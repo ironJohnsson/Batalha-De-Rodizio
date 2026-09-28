@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { apiRequest } from '../services/api';
 import socket from '../services/socket';
-import { getTitleByStats } from '../utils/titles';
-import { RODIZIO_TYPES, getRodizioConfig } from '../utils/rodizioTypes';
+import { getTitleByStats, getRankInfo } from '../utils/titles';
+import { RODIZIO_TYPES, getRodizioConfig, getUnitLabel } from '../utils/rodizioTypes';
 import ChurrascoRulesModal from '../components/ChurrascoRulesModal';
 import { 
   Users, 
@@ -11,7 +11,6 @@ import {
   Trophy, 
   TrendingUp, 
   Flame, 
-  Utensils, 
   Award, 
   History, 
   ArrowRight, 
@@ -24,8 +23,11 @@ import {
   Search,
   KeyRound,
   RefreshCw,
-  Radio
+  Radio,
+  Swords,
+  ChevronRight
 } from 'lucide-react';
+import { calculateAchievements } from '../utils/achievements';
 
 export default function HomeView({ 
   onCreateRoom, 
@@ -299,7 +301,12 @@ export default function HomeView({
     });
   };
 
-  const currentTitle = isAuthenticated ? getTitleByStats(stats?.wins, stats?.total_slices) : '';
+  const userWins = Number(stats?.wins) || 0;
+  const userItems = Number(stats?.total_slices) || 0;
+  const userBattles = Number(stats?.total_battles) || 0;
+  const rankInfo = isAuthenticated ? getRankInfo(userWins, userItems) : null;
+  const currentTitle = rankInfo ? rankInfo.currentRank.title : (isAuthenticated ? getTitleByStats(userWins, userItems) : '');
+  const homeAchievements = isAuthenticated ? calculateAchievements(stats, null, []) : null;
 
   const filteredRooms = activeRooms.filter(r => 
     r.name.toLowerCase().includes(roomFilter.toLowerCase()) ||
@@ -728,7 +735,19 @@ export default function HomeView({
                             <div className={`p-1.5 rounded-xl ${isSelected ? type.accentBg : 'bg-zinc-200/60 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400'}`}>
                               <Icon className="w-4 h-4" />
                             </div>
-                            <span className="text-base">{type.emoji}</span>
+                            {isSelected && (
+                              <span className={`h-2 w-2 rounded-full ${
+                                type.id === 'churrasco'
+                                  ? 'bg-red-500'
+                                  : type.id === 'japones'
+                                  ? 'bg-rose-500'
+                                  : type.id === 'hamburguer'
+                                  ? 'bg-amber-500'
+                                  : type.id === 'bebida'
+                                  ? 'bg-sky-500'
+                                  : 'bg-orange-500'
+                              }`} />
+                            )}
                           </div>
                           <span className="text-xs font-black text-zinc-900 dark:text-white">
                             {type.label}
@@ -888,7 +907,7 @@ export default function HomeView({
                     </div>
                     <div className="text-right">
                       <span className="font-mono text-sm font-black text-orange-600 dark:text-orange-400">
-                        {item.slice_count} fatias
+                        {item.slice_count} {getUnitLabel(item.room_type, item.slice_count)}
                       </span>
                       <span className="text-[10px] text-zinc-400 block">
                         {item.finished_at ? new Date(item.finished_at).toLocaleDateString('pt-BR') : ''}
@@ -922,61 +941,152 @@ export default function HomeView({
                 </div>
                 <div className="inline-flex items-center gap-1.5 rounded-full bg-orange-500/10 px-3 py-1 text-xs font-bold text-orange-600 dark:text-orange-400 border border-orange-500/20 group-hover:scale-105 transition-transform">
                   <Award className="h-3.5 w-3.5" />
-                  <span>{currentTitle}</span>
+                  <span>Nível {rankInfo?.currentRank?.level || 1} • {currentTitle}</span>
                 </div>
               </div>
 
-              <div className="mt-5 grid grid-cols-2 gap-3">
-                <div className="rounded-2xl border border-zinc-100 bg-zinc-50/80 p-3.5 dark:border-zinc-800 dark:bg-zinc-950/40">
-                  <div className="flex items-center gap-1.5 text-zinc-500 dark:text-zinc-400 mb-1">
-                    <TrendingUp className="h-3.5 w-3.5 text-orange-500" />
-                    <span className="text-[11px] font-semibold">Média de Fatias</span>
+              {/* Progress bar to next rank */}
+              {rankInfo && !rankInfo.isMaxRank && (
+                <div className="mt-4 p-3 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-xs">
+                  <div className="flex items-center justify-between text-[11px] font-bold text-amber-700 dark:text-amber-400 mb-1.5">
+                    <span>Próxima Patente: {rankInfo.nextRank.title}</span>
+                    <span className="font-mono">{rankInfo.progressPercent}%</span>
                   </div>
-                  <span className="font-mono text-2xl font-black text-zinc-900 dark:text-white">
+                  <div className="w-full h-1.5 rounded-full bg-zinc-200 dark:bg-zinc-800 overflow-hidden mb-1.5">
+                    <div 
+                      className="h-full bg-gradient-to-r from-amber-500 to-orange-500 rounded-full transition-all duration-300"
+                      style={{ width: `${Math.max(6, rankInfo.progressPercent)}%` }}
+                    />
+                  </div>
+                  <p className="text-[10px] text-zinc-500 dark:text-zinc-400 leading-tight">
+                    Falta ganhar <strong>{rankInfo.neededWins} {rankInfo.neededWins === 1 ? 'partida' : 'partidas'}</strong> OU consumir <strong>{rankInfo.neededItems} porções</strong>
+                  </p>
+                </div>
+              )}
+
+              {/* 5 Career Stats Cards */}
+              <div className="mt-4 grid grid-cols-2 gap-2.5">
+                {/* Vitórias */}
+                <div className="rounded-2xl border border-zinc-100 bg-zinc-50/80 p-3 dark:border-zinc-800 dark:bg-zinc-950/40">
+                  <div className="flex items-center gap-1.5 text-zinc-500 dark:text-zinc-400 mb-1">
+                    <Trophy className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                    <span className="text-[11px] font-semibold truncate">Vitórias</span>
+                  </div>
+                  <span className="font-mono text-xl font-black text-amber-500 block">
+                    {userWins}
+                  </span>
+                  <span className="text-[9px] text-zinc-400 block mt-0.5">campeão</span>
+                </div>
+
+                {/* Batalhas */}
+                <div className="rounded-2xl border border-zinc-100 bg-zinc-50/80 p-3 dark:border-zinc-800 dark:bg-zinc-950/40">
+                  <div className="flex items-center gap-1.5 text-zinc-500 dark:text-zinc-400 mb-1">
+                    <Swords className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                    <span className="text-[11px] font-semibold truncate">Batalhas</span>
+                  </div>
+                  <span className="font-mono text-xl font-black text-zinc-900 dark:text-white block">
+                    {userBattles}
+                  </span>
+                  <span className="text-[9px] text-zinc-400 block mt-0.5">disputadas</span>
+                </div>
+
+                {/* Total Consumido */}
+                <div className="rounded-2xl border border-zinc-100 bg-zinc-50/80 p-3 dark:border-zinc-800 dark:bg-zinc-950/40">
+                  <div className="flex items-center gap-1.5 text-zinc-500 dark:text-zinc-400 mb-1">
+                    <Flame className="h-3.5 w-3.5 text-orange-500 shrink-0" />
+                    <span className="text-[11px] font-semibold truncate">Total Porções</span>
+                  </div>
+                  <span className="font-mono text-xl font-black text-zinc-900 dark:text-white block">
+                    {userItems}
+                  </span>
+                  <span className="text-[9px] text-zinc-400 block mt-0.5">devoradas</span>
+                </div>
+
+                {/* Média por Batalha */}
+                <div className="rounded-2xl border border-zinc-100 bg-zinc-50/80 p-3 dark:border-zinc-800 dark:bg-zinc-950/40">
+                  <div className="flex items-center gap-1.5 text-zinc-500 dark:text-zinc-400 mb-1">
+                    <TrendingUp className="h-3.5 w-3.5 text-blue-500 shrink-0" />
+                    <span className="text-[11px] font-semibold truncate">Média / Mesa</span>
+                  </div>
+                  <span className="font-mono text-xl font-black text-zinc-900 dark:text-white block">
                     {stats.avg_slices}
                   </span>
+                  <span className="text-[9px] text-zinc-400 block mt-0.5">por rodada</span>
                 </div>
 
-                <div className="rounded-2xl border border-zinc-100 bg-zinc-50/80 p-3.5 dark:border-zinc-800 dark:bg-zinc-950/40">
-                  <div className="flex items-center gap-1.5 text-zinc-500 dark:text-zinc-400 mb-1">
-                    <Trophy className="h-3.5 w-3.5 text-amber-500" />
-                    <span className="text-[11px] font-semibold">Vitórias</span>
+                {/* Recorde em 1 Mesa (col-span-2) */}
+                <div className="col-span-2 rounded-2xl border border-zinc-100 bg-zinc-50/80 p-3 dark:border-zinc-800 dark:bg-zinc-950/40 flex items-center justify-between">
+                  <div>
+                    <div className="flex items-center gap-1.5 text-zinc-500 dark:text-zinc-400 mb-0.5">
+                      <Award className="h-3.5 w-3.5 text-purple-500 shrink-0" />
+                      <span className="text-[11px] font-semibold">Recorde em 1 Mesa</span>
+                    </div>
+                    <span className="text-[9px] text-zinc-400 block">
+                      Maior marca em uma única sessão
+                    </span>
                   </div>
-                  <span className="font-mono text-2xl font-black text-amber-500">
-                    {stats.wins}
-                  </span>
-                </div>
-
-                <div className="rounded-2xl border border-zinc-100 bg-zinc-50/80 p-3.5 dark:border-zinc-800 dark:bg-zinc-950/40">
-                  <div className="flex items-center gap-1.5 text-zinc-500 dark:text-zinc-400 mb-1">
-                    <Flame className="h-3.5 w-3.5 text-red-500" />
-                    <span className="text-[11px] font-semibold">Recorde (1 sessão)</span>
+                  <div className="text-right">
+                    <span className="font-mono text-xl font-black text-zinc-900 dark:text-white">
+                      {stats.max_slices}
+                    </span>
+                    <span className="text-[10px] text-zinc-400 font-medium block">
+                      porções
+                    </span>
                   </div>
-                  <span className="font-mono text-2xl font-black text-zinc-900 dark:text-white">
-                    {stats.max_slices}
-                  </span>
-                </div>
-
-                <div className="rounded-2xl border border-zinc-100 bg-zinc-50/80 p-3.5 dark:border-zinc-800 dark:bg-zinc-950/40">
-                  <div className="flex items-center gap-1.5 text-zinc-500 dark:text-zinc-400 mb-1">
-                    <Utensils className="h-3.5 w-3.5 text-blue-500" />
-                    <span className="text-[11px] font-semibold">Total Devorado</span>
-                  </div>
-                  <span className="font-mono text-2xl font-black text-zinc-900 dark:text-white">
-                    {stats.total_slices}
-                  </span>
                 </div>
               </div>
 
-              {/* View / Edit Profile Button */}
-              <button
-                type="button"
-                onClick={onOpenProfile}
-                className="mt-4 w-full flex items-center justify-center gap-2 rounded-2xl bg-amber-500 hover:bg-amber-600 text-white py-3 text-xs font-bold transition-all shadow-md shadow-amber-500/20 cursor-pointer"
-              >
-                <Edit3 className="h-4 w-4" />
-                <span>Editar Perfil e Alterar Apelido</span>
-              </button>
+              {/* Achievements Summary Banner */}
+              {homeAchievements && (
+                <div 
+                  onClick={() => onOpenProfile('conquistas')}
+                  className="mt-3 p-3 rounded-2xl bg-amber-500/10 hover:bg-amber-500/15 border border-amber-500/25 flex items-center justify-between cursor-pointer transition-all group"
+                  title="Ver todas as Missões e Conquistas"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-1.5 rounded-xl bg-amber-500/20 text-amber-600 dark:text-amber-400 shrink-0 group-hover:scale-105 transition-transform">
+                      <Trophy className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs font-black text-amber-900 dark:text-amber-200 block leading-tight">
+                          Missões & Conquistas
+                        </span>
+                        <span className="text-[10px] font-mono font-bold px-1.5 py-0.2 rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-300">
+                          {homeAchievements.unlockedPoints} pts
+                        </span>
+                      </div>
+                      <span className="text-[10px] text-zinc-500 dark:text-zinc-400 font-medium">
+                        {homeAchievements.unlockedCount} de {homeAchievements.totalCount} conquistas desbloqueadas
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1 text-[11px] font-bold text-amber-600 dark:text-amber-400 shrink-0">
+                    <span>Ver</span>
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </div>
+                </div>
+              )}
+
+              {/* View Profile Actions */}
+              <div className="mt-3 flex flex-col sm:flex-row gap-2">
+                <button
+                  type="button"
+                  onClick={() => onOpenProfile('by-type')}
+                  className="flex-1 flex items-center justify-center gap-1.5 rounded-2xl bg-orange-500/10 hover:bg-orange-500/20 text-orange-600 dark:text-orange-400 border border-orange-500/20 py-3 text-xs font-bold transition-all cursor-pointer"
+                >
+                  <Flame className="h-3.5 w-3.5" />
+                  <span>Ver por Tipo de Rodízio</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onOpenProfile('general')}
+                  className="flex items-center justify-center gap-1.5 rounded-2xl bg-amber-500 hover:bg-amber-600 text-white px-4 py-3 text-xs font-bold transition-all shadow-md shadow-amber-500/20 cursor-pointer"
+                >
+                  <Edit3 className="h-3.5 w-3.5" />
+                  <span>Editar Perfil</span>
+                </button>
+              </div>
             </div>
           ) : (
             <div className="rounded-3xl border border-orange-500/20 bg-gradient-to-br from-orange-500/10 via-amber-500/5 to-transparent p-6 shadow-xl dark:border-orange-500/20 dark:bg-zinc-900">
@@ -1024,7 +1134,7 @@ export default function HomeView({
                           {champ.nickname}
                         </span>
                         <span className="text-[11px] text-zinc-500 dark:text-zinc-400 font-medium">
-                          (Média de fatias: <strong className="text-zinc-700 dark:text-zinc-300">{champ.avg_slices}</strong>)
+                          (Média: <strong className="text-zinc-700 dark:text-zinc-300">{champ.avg_slices}</strong> porções)
                         </span>
                       </div>
                     </div>
@@ -1033,7 +1143,7 @@ export default function HomeView({
                         {champ.wins} {champ.wins === 1 ? 'vitória' : 'vitórias'}
                       </span>
                       <span className="text-[10px] text-zinc-400">
-                        {champ.total_slices} fatias total
+                        {champ.total_slices} porções total
                       </span>
                     </div>
                   </div>

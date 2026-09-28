@@ -184,10 +184,10 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Leave Room
-  socket.on('room:leave', async ({ code }, callback) => {
+  // Leave Room (Acionado explicitamente quando o usuário decide sair da mesa)
+  socket.on('room:leave', async ({ code, userId, nickname }, callback) => {
     try {
-      const result = await roomsManager.leaveRoom({ code, socketId: socket.id });
+      const result = await roomsManager.leaveRoom({ code, socketId: socket.id, userId, nickname });
       if (result) {
         socket.leave(result.code);
         if (result.roomClosed) {
@@ -204,20 +204,12 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('disconnect', async () => {
-    console.log(`[Socket] Desconectado: ${socket.id}`);
-    try {
-      const result = await roomsManager.leaveRoom({ socketId: socket.id });
-      if (result) {
-        if (result.roomClosed) {
-          io.to(result.code).emit('room:closed', { message: 'A sala foi encerrada pois todos os participantes saíram.' });
-        } else {
-          io.to(result.code).emit('room:updated', result.room);
-        }
-        io.emit('rooms:updated_list', roomsManager.listActiveRooms());
-      }
-    } catch (err) {
-      console.error('Erro ao processar desconexão:', err);
+  // Disconnect temporário (ex: tela do celular apagou, troca de app, oscilação de Wi-Fi)
+  socket.on('disconnect', () => {
+    console.log(`[Socket] Conexão pausada/desconectada: ${socket.id}`);
+    const result = roomsManager.handleDisconnect(socket.id);
+    if (result) {
+      io.to(result.code).emit('room:updated', result.room);
     }
   });
 });
