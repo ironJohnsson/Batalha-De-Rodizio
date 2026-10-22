@@ -1,4 +1,5 @@
 const express = require('express');
+const crypto = require('crypto');
 const router = express.Router();
 const { db } = require('../db');
 const { hashPassword, comparePassword, generateToken, authMiddleware } = require('../auth');
@@ -133,7 +134,7 @@ router.post('/login', async (req, res) => {
 router.get('/me', authMiddleware, async (req, res) => {
   try {
     const userRes = await db.execute({
-      sql: 'SELECT id, nickname, created_at FROM users WHERE id = ?',
+      sql: 'SELECT id, nickname, email, avatar_url, google_id, created_at FROM users WHERE id = ?',
       args: [req.user.id]
     });
     const user = userRes.rows[0];
@@ -251,6 +252,140 @@ router.put('/update-nickname', authMiddleware, async (req, res) => {
   } catch (err) {
     console.error('Erro ao atualizar apelido:', err);
     return res.status(500).json({ error: 'Erro ao atualizar apelido.' });
+  }
+});
+
+// POST /api/auth/google
+router.post('/google', async (req, res) => {
+  const { credential } = req.body;
+
+  if (!credential) {
+    return res.status(400).json({ error: 'Credencial do Google não fornecida.' });
+  }
+
+  try {
+    // 1. Validate token with Google official tokeninfo endpoint
+    const googleRes = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(credential)}`);
+    if (!googleRes.ok) {
+      const errData = await googleRes.json().catch(() => ({}));
+      console.error('Google token verification failed:', errData);
+      return res.status(401).json({ error: 'Token do Google inválido ou expirado.' });
+    }
+
+    const payload = await googleRes.json();
+    const expectedClientId = process.env.GOOGLE_CLIENT_ID || '781220321777-c2pr7683dcp2p9mtkpqv8f2hf8r891qu.apps.googleusercontent.com';
+
+    // Verify audience matches expected Client ID
+    if (payload.aud !== expectedClientId) {
+      console.warn('Audience mismatch. Received:', payload.aud, 'Expected:', expectedClientId);
+      return res.status(401).json({ error: 'Credencial do Google não autorizada para este aplicativo.' });
+    }
+
+    const googleId = payload.sub;
+    const email = payload.email ? payload.email.toLowerCase().trim() : null;
+    const avatarUrl = payload.picture || null;
+    const rawName = payload.given_name || payload.name || (email ? email.split('@')[0] : 'Comilao');
+
+    // 2. Check if user already exists by google_id
+    let userRes = await db.execute({
+      sql: 'SELECT id, nickname, email, avatar_url FROM users WHERE google_id = ?',
+      args: [googleId]
+    });
+
+    let user = userRes.rows[0];
+
+    // 3. If not found by google_id, check by email
+    if (!user && email) {
+      const emailRes = await db.execute({
+        sql: 'SELECT id, nickname, email, avatar_url FROM users WHERE email = ? COLLATE NOCASE',
+        args: [email]
+      });
+
+      if (emailRes.rows.length > 0) {
+        user = emailRes.rows[0];
+        // Link google_id and update avatar
+        await db.execute({
+          sql: 'UPDATE users SET google_id = ?, avatar_url = COALESCE(avatar_url, ?) WHERE id = ?',
+          args: [googleId, avatarUrl, user.id]
+        });
+        user.avatar_url = user.avatar_url || avatarUrl;
+      }
+    }
+
+    // 4. If user still does not exist, create a new user account
+    if (!user) {
+      let baseNickname = rawName.replace(/[^a-zA-Z0-9_]/g, '').slice(0, 15);
+      if (baseNickname.length < 2) baseNickname = 'Gourmet';
+
+      let cleanNickname = baseNickname;
+      let counter = 1;
+      while (true) {
+        const checkRes = await db.execute({
+          sql: 'SELECT id FROM users WHERE nickname = ? COLLATE NOCASE',
+          args: [cleanNickname]
+        });
+        if (checkRes.rows.length === 0) break;
+        counter++;
+        cleanNickname = `${baseNickname}_${counter}`;
+      }
+
+      const randomPassword = crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2);
+      const password_hash = hashPassword(randomPassword);
+
+      const insertRes = await db.execute({
+        sql: 'INSERT INTO users (nickname, password_hash, google_id, email, avatar_url) VALUES (?, ?, ?, ?, ?)',
+        args: [cleanNickname, password_hash, googleId, email, avatarUrl]
+      });
+
+      const newUserId = Number(insertRes.lastInsertRowid);
+
+      await db.execute({
+        sql: 'INSERT INTO user_stats (user_id, total_battles, wins, total_slices, max_slices, avg_slices) VALUES (?, 0, 0, 0, 0, 0.0)',
+        args: [newUserId]
+      });
+
+      user = {
+        id: newUserId,
+        nickname: cleanNickname,
+        email,
+        avatar_url: avatarUrl
+      };
+    } else if (avatarUrl && !user.avatar_url) {
+      await db.execute({
+        sql: 'UPDATE users SET avatar_url = ? WHERE id = ?',
+        args: [avatarUrl, user.id]
+      });
+      user.avatar_url = avatarUrl;
+    }
+
+    const statsRes = await db.execute({
+      sql: 'SELECT * FROM user_stats WHERE user_id = ?',
+      args: [user.id]
+    });
+    const stats = statsRes.rows[0] || {
+      total_battles: 0,
+      wins: 0,
+      total_slices: 0,
+      max_slices: 0,
+      avg_slices: 0.0
+    };
+
+    const token = generateToken(user);
+
+    return res.status(200).json({
+      message: 'Autenticado com sucesso via Google!',
+      token,
+      user: {
+        id: user.id,
+        nickname: user.nickname,
+        email: user.email || null,
+        avatar_url: user.avatar_url || null
+      },
+      stats
+    });
+  } catch (err) {
+    console.error('Erro na autenticação do Google:', err);
+    return res.status(500).json({ error: 'Erro interno ao autenticar com o Google.' });
   }
 });
 

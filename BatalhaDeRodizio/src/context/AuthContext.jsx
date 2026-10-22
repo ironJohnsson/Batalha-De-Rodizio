@@ -53,6 +53,18 @@ export function AuthProvider({ children }) {
     return data;
   };
 
+  const loginWithGoogle = async (credential) => {
+    const data = await apiRequest('/auth/google', {
+      method: 'POST',
+      body: JSON.stringify({ credential })
+    });
+    localStorage.setItem('contarodizio_token', data.token);
+    setToken(data.token);
+    setUser(data.user);
+    setStats(data.stats);
+    return data;
+  };
+
   const logout = () => {
     localStorage.removeItem('contarodizio_token');
     setToken(null);
@@ -94,6 +106,7 @@ export function AuthProvider({ children }) {
       loading,
       login,
       register,
+      loginWithGoogle,
       logout,
       refreshProfile,
       updateNickname,

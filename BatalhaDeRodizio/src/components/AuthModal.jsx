@@ -1,9 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { X, Lock, User, AlertCircle, ShieldCheck, Eye, EyeOff } from 'lucide-react';
 
 export default function AuthModal({ isOpen, onClose }) {
-  const { login, register } = useAuth();
+  const { login, register, loginWithGoogle } = useAuth();
+  const googleBtnRef = useRef(null);
+  const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '781220321777-c2pr7683dcp2p9mtkpqv8f2hf8r891qu.apps.googleusercontent.com';
   const [tab, setTab] = useState('login');
   const [nickname, setNickname] = useState('');
   const [password, setPassword] = useState('');
@@ -12,6 +14,53 @@ export default function AuthModal({ isOpen, onClose }) {
   const [loading, setLoading] = useState(false);
 
   if (!isOpen) return null;
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    let timer;
+    const initGoogle = () => {
+      if (window.google?.accounts?.id && googleBtnRef.current) {
+        try {
+          window.google.accounts.id.initialize({
+            client_id: GOOGLE_CLIENT_ID,
+            callback: async (response) => {
+              if (!response?.credential) return;
+              setLoading(true);
+              setError('');
+              try {
+                await loginWithGoogle(response.credential);
+                onClose();
+              } catch (err) {
+                setError(err.message || 'Erro ao autenticar com Google.');
+              } finally {
+                setLoading(false);
+              }
+            }
+          });
+
+          googleBtnRef.current.innerHTML = '';
+          window.google.accounts.id.renderButton(googleBtnRef.current, {
+            theme: document.documentElement.classList.contains('dark') ? 'filled_black' : 'outline',
+            size: 'large',
+            text: tab === 'login' ? 'signin_with' : 'signup_with',
+            shape: 'rectangular',
+            width: 320,
+            locale: 'pt-BR'
+          });
+        } catch (err) {
+          console.warn('Erro ao inicializar botão do Google:', err);
+        }
+      } else {
+        timer = setTimeout(initGoogle, 250);
+      }
+    };
+
+    initGoogle();
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
+  }, [isOpen, tab]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -154,6 +203,19 @@ export default function AuthModal({ isOpen, onClose }) {
             {loading ? 'Processando...' : tab === 'login' ? 'Entrar na Conta' : 'Criar Minha Conta'}
           </button>
         </form>
+
+        {/* Divisor "ou continue com" */}
+        <div className="relative my-4 flex items-center justify-center">
+          <div className="w-full border-t border-zinc-200 dark:border-zinc-800"></div>
+          <span className="absolute bg-white px-3 text-[10px] font-bold uppercase tracking-wider text-zinc-400 dark:bg-zinc-900">
+            ou continue com
+          </span>
+        </div>
+
+        {/* Botão Oficial do Google GIS */}
+        <div className="w-full flex justify-center py-1">
+          <div ref={googleBtnRef} className="w-full flex justify-center min-h-[44px]"></div>
+        </div>
 
         <p className="mt-4 text-center text-[11px] text-zinc-500 dark:text-zinc-400">
           Sem burocracia: apenas apelido e senha para registrar suas fatias.

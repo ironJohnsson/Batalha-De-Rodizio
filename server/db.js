@@ -16,7 +16,10 @@ async function initDb() {
       `CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         nickname TEXT UNIQUE NOT NULL COLLATE NOCASE,
-        password_hash TEXT NOT NULL,
+        password_hash TEXT,
+        google_id TEXT UNIQUE,
+        email TEXT UNIQUE,
+        avatar_url TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )`,
       `CREATE TABLE IF NOT EXISTS user_stats (
@@ -65,6 +68,9 @@ async function initDb() {
     try { await db.execute("ALTER TABLE rooms ADD COLUMN type TEXT DEFAULT 'pizza'"); } catch (e) {}
     try { await db.execute("ALTER TABLE rooms ADD COLUMN password TEXT"); } catch (e) {}
     try { await db.execute("ALTER TABLE rooms ADD COLUMN custom_rules TEXT"); } catch (e) {}
+    try { await db.execute("ALTER TABLE users ADD COLUMN google_id TEXT"); } catch (e) {}
+    try { await db.execute("ALTER TABLE users ADD COLUMN email TEXT"); } catch (e) {}
+    try { await db.execute("ALTER TABLE users ADD COLUMN avatar_url TEXT"); } catch (e) {}
 
     console.log(`[Database] Conectado e tabelas verificadas (${process.env.TURSO_DATABASE_URL ? 'Turso Cloud' : 'SQLite Local'})`);
   } catch (err) {
