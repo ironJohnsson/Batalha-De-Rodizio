@@ -99,6 +99,40 @@ export const CHURRASCO_RULES = [
   }
 ];
 
+export const DEFAULT_CUSTOM_RULES = {
+  pizza: [
+    { id: 'massa', name: 'Massa (Lasanha / Canelone)', points: 2 },
+    { id: 'petisco', name: 'Porção / Petisco (Batata / Coxinha)', points: 1 },
+    { id: 'sobremesa', name: 'Sobremesa Especial', points: 2 }
+  ],
+  japones: [
+    { id: 'temaki', name: 'Temaki Completo', points: 5 },
+    { id: 'prato_quente', name: 'Yakisoba / Prato Quente', points: 4 },
+    { id: 'entrada', name: 'Harumaki / Guioza', points: 2 }
+  ],
+  hamburguer: [
+    { id: 'batata', name: 'Porção de Batata / Onions', points: 2 },
+    { id: 'milkshake', name: 'Milkshake / Sobremesa', points: 2 },
+    { id: 'petisco', name: 'Nuggets / Salgadinhos', points: 1 }
+  ],
+  bebida: [
+    { id: 'drink', name: 'Drink / Caipirinha', points: 2 },
+    { id: 'dose', name: 'Dose / Shot', points: 1 },
+    { id: 'torre', name: 'Torre de Chopp (por pessoa)', points: 3 }
+  ],
+  churrasco: [
+    { id: 'buffet', name: 'Prato do Buffet / Guarnição', points: 3 },
+    { id: 'pao_alho', name: 'Pão de Alho / Queijo Coalho', points: 1 },
+    { id: 'sobremesa', name: 'Sobremesa do Rodízio', points: 2 }
+  ]
+};
+
+export function getDefaultCustomRules(type) {
+  const normalized = (type || 'pizza').toLowerCase().trim();
+  const rules = DEFAULT_CUSTOM_RULES[normalized] || DEFAULT_CUSTOM_RULES.pizza;
+  return rules.map(r => ({ ...r }));
+}
+
 export function getRodizioConfig(type) {
   const normalized = (type || 'pizza').toLowerCase().trim();
   return RODIZIO_TYPES.find(t => t.id === normalized) || RODIZIO_TYPES[0];

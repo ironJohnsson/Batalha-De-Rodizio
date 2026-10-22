@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { getRodizioConfig, getUnitLabel } from '../utils/rodizioTypes';
 import ChurrascoRulesModal from '../components/ChurrascoRulesModal';
+import TableRulesModal from '../components/TableRulesModal';
 import {
   Plus,
   Minus,
@@ -16,7 +17,9 @@ import {
   Radio,
   Clock,
   Flame,
-  Lock
+  Lock,
+  Sliders,
+  BookOpen
 } from 'lucide-react';
 import QrCodeModal from '../components/QrCodeModal';
 
@@ -31,6 +34,7 @@ export default function RoomView({
   const [showQrModal, setShowQrModal] = useState(false);
   const [showConfirmFinish, setShowConfirmFinish] = useState(false);
   const [showRulesInfo, setShowRulesInfo] = useState(false);
+  const [showTableRulesModal, setShowTableRulesModal] = useState(false);
   const [copiedCode, setCopiedCode] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
 
@@ -60,6 +64,12 @@ export default function RoomView({
     if (myEntry.slices > 0) {
       onUpdateSlice(-1);
     }
+  };
+
+  const handleAddCustomItem = (rule) => {
+    setIsAnimating(true);
+    setTimeout(() => setIsAnimating(false), 300);
+    onUpdateSlice(rule.points, rule.name);
   };
 
   const handleCopyCode = () => {
@@ -115,6 +125,15 @@ export default function RoomView({
               <span>Regras</span>
             </button>
           )}
+
+          <button
+            onClick={() => setShowTableRulesModal(true)}
+            title="Ver regras e equivalências da mesa"
+            className="flex items-center gap-1.5 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs font-bold text-zinc-700 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-750 transition-all cursor-pointer shadow-2xs"
+          >
+            <Sliders className="h-3.5 w-3.5 text-orange-500" />
+            <span>Regras da Mesa</span>
+          </button>
 
           <button
             onClick={handleCopyCode}
@@ -196,6 +215,49 @@ export default function RoomView({
                 <Minus className="h-3.5 w-3.5" />
                 <span>{typeConfig.actionSub}</span>
               </button>
+
+              {/* Botões de Ação Rápida para Itens Especiais / Regras Customizadas */}
+              {Array.isArray(room.customRules) && room.customRules.length > 0 && (
+                <div className="mt-2 pt-3 border-t border-zinc-100 dark:border-zinc-800">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-400 flex items-center gap-1">
+                      <Sliders className="w-3 h-3 text-orange-500" />
+                      <span>Itens Especiais da Mesa</span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setShowTableRulesModal(true)}
+                      className="text-[11px] font-bold text-orange-600 dark:text-orange-400 hover:underline cursor-pointer flex items-center gap-1"
+                    >
+                      <BookOpen className="w-3 h-3" />
+                      <span>Ver Regras</span>
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {room.customRules.map((rule) => (
+                      <button
+                        key={rule.id || rule.name}
+                        type="button"
+                        onClick={() => handleAddCustomItem(rule)}
+                        className="flex items-center justify-between p-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/70 hover:bg-orange-500/10 hover:border-orange-500/30 dark:bg-zinc-950/40 dark:hover:bg-orange-500/10 dark:hover:border-orange-500/40 transition-all cursor-pointer text-left group active:scale-98"
+                      >
+                        <div className="flex items-center gap-2 truncate">
+                          <div className="p-1.5 rounded-lg bg-orange-500/10 text-orange-600 dark:text-orange-400 shrink-0 group-hover:scale-105 transition-transform">
+                            <Plus className="w-3.5 h-3.5" />
+                          </div>
+                          <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200 truncate">
+                            {rule.name}
+                          </span>
+                        </div>
+                        <span className="ml-2 font-mono text-[11px] font-black text-orange-600 dark:text-orange-400 bg-orange-500/10 px-2 py-0.5 rounded-md border border-orange-500/20 shrink-0">
+                          +{rule.points} {getUnitLabel(room.type, rule.points)}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
@@ -391,6 +453,13 @@ export default function RoomView({
         onClose={() => setShowRulesInfo(false)}
         mode="info"
         roomName={room.name}
+      />
+
+      {/* Modal Geral de Regras e Equivalências da Mesa */}
+      <TableRulesModal
+        isOpen={showTableRulesModal}
+        onClose={() => setShowTableRulesModal(false)}
+        room={room}
       />
     </div>
   );

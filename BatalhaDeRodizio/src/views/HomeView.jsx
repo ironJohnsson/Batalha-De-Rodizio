@@ -3,7 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { apiRequest } from '../services/api';
 import socket from '../services/socket';
 import { getTitleByStats, getRankInfo } from '../utils/titles';
-import { RODIZIO_TYPES, getRodizioConfig, getUnitLabel } from '../utils/rodizioTypes';
+import { RODIZIO_TYPES, getRodizioConfig, getUnitLabel, getDefaultCustomRules } from '../utils/rodizioTypes';
 import ChurrascoRulesModal from '../components/ChurrascoRulesModal';
 import { 
   Users, 
@@ -25,7 +25,14 @@ import {
   RefreshCw,
   Radio,
   Swords,
-  ChevronRight
+  ChevronRight,
+  Sliders,
+  Trash2,
+  ChevronDown,
+  ChevronUp,
+  FileText,
+  RotateCcw,
+  Plus
 } from 'lucide-react';
 import { calculateAchievements } from '../utils/achievements';
 
@@ -53,6 +60,13 @@ export default function HomeView({
   const [enableRoomPassword, setEnableRoomPassword] = useState(false);
   const [newRoomPassword, setNewRoomPassword] = useState('');
   const [showNewRoomPassword, setShowNewRoomPassword] = useState(false);
+  // Custom Rules states
+  const [customRules, setCustomRules] = useState(() => getDefaultCustomRules('pizza'));
+  const [customRulesNotes, setCustomRulesNotes] = useState('');
+  const [showCustomRulesConfig, setShowCustomRulesConfig] = useState(false);
+  const [newRuleName, setNewRuleName] = useState('');
+  const [newRulePoints, setNewRulePoints] = useState(2);
+  const [showAddRuleInput, setShowAddRuleInput] = useState(false);
 
   // Churrasco Rules Modal states
   const [showChurrascoRulesModal, setShowChurrascoRulesModal] = useState(false);
@@ -228,6 +242,42 @@ export default function HomeView({
     await executeJoin({ targetCode, currentRoomPassword });
   };
 
+  const handleSelectRodizioType = (typeId) => {
+    setSelectedRodizioType(typeId);
+    setCustomRules(getDefaultCustomRules(typeId));
+  };
+
+  const handleUpdateRulePoints = (ruleId, newPoints) => {
+    const val = parseInt(newPoints, 10);
+    setCustomRules(prev =>
+      prev.map(r => (r.id === ruleId ? { ...r, points: isNaN(val) || val < 1 ? 1 : val } : r))
+    );
+  };
+
+  const handleRemoveRule = (ruleId) => {
+    setCustomRules(prev => prev.filter(r => r.id !== ruleId));
+  };
+
+  const handleAddCustomRule = () => {
+    const trimmed = newRuleName.trim();
+    if (!trimmed) return;
+    const points = parseInt(newRulePoints, 10);
+    const newRule = {
+      id: `custom_${Date.now()}`,
+      name: trimmed,
+      points: isNaN(points) || points < 1 ? 1 : points,
+      iconName: 'Plus'
+    };
+    setCustomRules(prev => [...prev, newRule]);
+    setNewRuleName('');
+    setNewRulePoints(2);
+    setShowAddRuleInput(false);
+  };
+
+  const handleResetRulesToDefault = () => {
+    setCustomRules(getDefaultCustomRules(selectedRodizioType));
+  };
+
   // Execute Create after validation and rules acceptance
   const executeCreate = async (createData) => {
     setIsSubmitting(true);
@@ -254,7 +304,9 @@ export default function HomeView({
         type: createData.type,
         hostUserId: finalUserId,
         hostNickname: finalNickname,
-        password: createData.password
+        password: createData.password,
+        customRules: createData.customRules,
+        customRulesNotes: createData.customRulesNotes
       });
     } catch (err) {
       setError(err.message || 'Erro ao criar a sala.');
@@ -288,7 +340,9 @@ export default function HomeView({
       setPendingCreateData({
         name: finalRoomName,
         type: 'churrasco',
-        password: finalRoomPassword
+        password: finalRoomPassword,
+        customRules,
+        customRulesNotes: customRulesNotes.trim()
       });
       setShowChurrascoRulesModal(true);
       return;
@@ -297,7 +351,9 @@ export default function HomeView({
     await executeCreate({
       name: finalRoomName,
       type: selectedRodizioType,
-      password: finalRoomPassword
+      password: finalRoomPassword,
+      customRules,
+      customRulesNotes: customRulesNotes.trim()
     });
   };
 
@@ -724,7 +780,7 @@ export default function HomeView({
                         <button
                           key={type.id}
                           type="button"
-                          onClick={() => setSelectedRodizioType(type.id)}
+                          onClick={() => handleSelectRodizioType(type.id)}
                           className={`flex flex-col items-start p-3 rounded-2xl border text-left transition-all cursor-pointer ${
                             isSelected
                               ? `border-2 ${type.accentBorder} bg-white dark:bg-zinc-800 shadow-md ring-2 ring-orange-500/20`
@@ -765,6 +821,202 @@ export default function HomeView({
                       <span>
                         <strong>Rodízio de Churrasco:</strong> Inclui regras de contagem de porções (ex: coração de galinha e queijo contam como 1 pedaço).
                       </span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Regras Customizadas e Equivalências de Pontos */}
+                <div className="rounded-2xl border border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950/60 overflow-hidden transition-all">
+                  <button
+                    type="button"
+                    onClick={() => setShowCustomRulesConfig(!showCustomRulesConfig)}
+                    className="w-full flex items-center justify-between p-3.5 text-left hover:bg-zinc-100/60 dark:hover:bg-zinc-900/50 transition-colors cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <div className="p-2 rounded-xl bg-orange-500/10 text-orange-600 dark:text-orange-400">
+                        <Sliders className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100">
+                            Regras e Equivalências de Pontos
+                          </span>
+                          <span className="rounded-full bg-orange-500/10 px-2 py-0.5 text-[10px] font-extrabold text-orange-600 dark:text-orange-400 border border-orange-500/20">
+                            {customRules.length} {customRules.length === 1 ? 'item' : 'itens'}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5">
+                          Configure quanto vale cada prato ou porção extra (ex: massas, temaki, sobremesa)
+                        </p>
+                      </div>
+                    </div>
+                    <div className="text-zinc-400 p-1">
+                      {showCustomRulesConfig ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                    </div>
+                  </button>
+
+                  {showCustomRulesConfig && (
+                    <div className="p-4 pt-1 border-t border-zinc-200/80 dark:border-zinc-800/80 space-y-3.5 animate-in fade-in duration-150">
+                      <div className="flex items-center justify-between text-[11px] text-zinc-500 dark:text-zinc-400 pt-2">
+                        <span>
+                          Unidade base do rodízio:{' '}
+                          <strong className="text-zinc-700 dark:text-zinc-200 font-bold">
+                            1 {getRodizioConfig(selectedRodizioType).unitSingular} = 1 ponto
+                          </strong>
+                        </span>
+                        {customRules.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={handleResetRulesToDefault}
+                            className="text-[10px] font-bold text-zinc-500 hover:text-orange-500 flex items-center gap-1 transition-colors cursor-pointer"
+                            title="Restaurar valores padrão"
+                          >
+                            <RotateCcw className="w-3 h-3" />
+                            <span>Padrão</span>
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Lista de Regras / Itens */}
+                      <div className="space-y-2">
+                        {customRules.map((rule) => {
+                          const unitSingular = getRodizioConfig(selectedRodizioType).unitSingular;
+                          const unitPlural = getRodizioConfig(selectedRodizioType).unitPlural;
+
+                          return (
+                            <div
+                              key={rule.id}
+                              className="flex items-center justify-between gap-3 p-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-2xs"
+                            >
+                              <div className="flex-1 min-w-0">
+                                <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100 block truncate">
+                                  {rule.name}
+                                </span>
+                                <span className="text-[10px] text-zinc-400 block">
+                                  Equivale a {rule.points} {rule.points === 1 ? unitSingular : unitPlural}
+                                </span>
+                              </div>
+
+                              <div className="flex items-center gap-2 shrink-0">
+                                <div className="flex items-center gap-1 bg-zinc-100 dark:bg-zinc-800 rounded-lg p-1 border border-zinc-200 dark:border-zinc-700">
+                                  <label className="text-[10px] font-bold text-zinc-500 px-1">
+                                    Vale:
+                                  </label>
+                                  <input
+                                    type="number"
+                                    min="1"
+                                    max="50"
+                                    value={rule.points}
+                                    onChange={(e) => handleUpdateRulePoints(rule.id, e.target.value)}
+                                    className="w-12 text-center text-xs font-mono font-black rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-orange-600 dark:text-orange-400 py-1 focus:outline-none focus:border-orange-500"
+                                  />
+                                  <span className="text-[10px] font-bold text-zinc-400 pr-1">
+                                    {rule.points === 1 ? unitSingular : unitPlural}
+                                  </span>
+                                </div>
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveRule(rule.id)}
+                                  className="p-1.5 text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-lg transition-colors cursor-pointer"
+                                  title="Remover item"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+
+                        {customRules.length === 0 && (
+                          <div className="p-3 rounded-xl border border-dashed border-zinc-200 dark:border-zinc-800 text-center text-xs text-zinc-400">
+                            Nenhum item adicional configurado. Todos os pontos contarão normalmente de 1 em 1.
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Form de adicionar novo item */}
+                      {showAddRuleInput ? (
+                        <div className="p-3 rounded-xl border border-orange-500/30 bg-orange-50/30 dark:bg-orange-950/20 space-y-2.5 animate-in fade-in duration-150">
+                          <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200 block">
+                            Adicionar Novo Prato / Item Especial
+                          </span>
+                          <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
+                            <input
+                              type="text"
+                              value={newRuleName}
+                              onChange={(e) => setNewRuleName(e.target.value)}
+                              placeholder="Nome do item (ex: Prato de Massa, Sobremesa)"
+                              maxLength={40}
+                              className="sm:col-span-8 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 py-1.5 text-xs text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 focus:outline-none focus:border-orange-500"
+                            />
+                            <div className="sm:col-span-4 flex items-center gap-1.5">
+                              <label className="text-[10px] font-bold text-zinc-500 shrink-0">
+                                Vale:
+                              </label>
+                              <input
+                                type="number"
+                                min="1"
+                                max="50"
+                                value={newRulePoints}
+                                onChange={(e) => setNewRulePoints(e.target.value)}
+                                className="w-14 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-2 py-1.5 text-xs font-mono font-bold text-orange-600 dark:text-orange-400 text-center focus:outline-none focus:border-orange-500"
+                              />
+                              <span className="text-[10px] text-zinc-400 font-bold shrink-0 truncate">
+                                {getRodizioConfig(selectedRodizioType).unitPlural}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="flex justify-end gap-2 pt-1">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setShowAddRuleInput(false);
+                                setNewRuleName('');
+                              }}
+                              className="px-3 py-1 text-xs font-semibold text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 transition-colors cursor-pointer"
+                            >
+                              Cancelar
+                            </button>
+                            <button
+                              type="button"
+                              onClick={handleAddCustomRule}
+                              disabled={!newRuleName.trim()}
+                              className="px-3 py-1 rounded-lg bg-orange-600 hover:bg-orange-500 disabled:opacity-50 text-white text-xs font-bold transition-colors cursor-pointer shadow-xs"
+                            >
+                              Salvar Item
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setShowAddRuleInput(true)}
+                          className="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl border border-dashed border-zinc-300 dark:border-zinc-700 text-xs font-bold text-orange-600 dark:text-orange-400 hover:bg-orange-50/50 dark:hover:bg-orange-950/30 transition-colors cursor-pointer"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          <span>Adicionar Item Personalizado</span>
+                        </button>
+                      )}
+
+                      {/* Observações / Regras Extras da Mesa */}
+                      <div className="pt-2">
+                        <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1 flex items-center gap-1.5">
+                          <FileText className="w-3.5 h-3.5 text-zinc-400" />
+                          <span>Observações ou Combinados da Mesa (Opcional):</span>
+                        </label>
+                        <textarea
+                          value={customRulesNotes}
+                          onChange={(e) => setCustomRulesNotes(e.target.value)}
+                          placeholder="Ex: Quem deixar comida no prato paga a rodada de refri. Borda recheada não pontua extra..."
+                          rows={2}
+                          maxLength={300}
+                          className="w-full rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-2.5 text-xs text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 focus:outline-none focus:border-orange-500 resize-none"
+                        />
+                        <span className="text-[10px] text-zinc-400 block text-right mt-0.5">
+                          {customRulesNotes.length}/300 caracteres
+                        </span>
+                      </div>
                     </div>
                   )}
                 </div>

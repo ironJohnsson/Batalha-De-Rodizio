@@ -12,23 +12,36 @@ function generateRoomCode() {
   return code;
 }
 
-async function createRoom({ name, hostUserId, hostNickname, hostSocketId, type, password }) {
+async function createRoom({ name, hostUserId, hostNickname, hostSocketId, type, password, customRules, customRulesNotes }) {
   let code = generateRoomCode();
   while (activeRooms.has(code)) {
     code = generateRoomCode();
   }
 
   const roomName = name && name.trim() ? name.trim() : `Mesa ${code}`;
-  const roomType = type && ['churrasco', 'pizza', 'outro'].includes(type.toLowerCase())
+  const validTypes = ['pizza', 'japones', 'hamburguer', 'bebida', 'churrasco', 'outro'];
+  const roomType = type && validTypes.includes(type.toLowerCase())
     ? type.toLowerCase()
     : 'pizza';
   const roomPass = password && password.trim() ? password.trim() : null;
+
+  const validCustomRules = Array.isArray(customRules)
+    ? customRules
+        .filter(r => r && r.name && Number(r.points) > 0)
+        .map(r => ({
+          id: String(r.id || Date.now() + Math.random()),
+          name: String(r.name).trim(),
+          points: Number(r.points)
+        }))
+    : [];
 
   const roomData = {
     code,
     name: roomName,
     type: roomType,
     password: roomPass,
+    customRules: validCustomRules,
+    customRulesNotes: customRulesNotes && customRulesNotes.trim() ? customRulesNotes.trim() : null,
     hostSocketId,
     hostUserId: hostUserId || null,
     hostNickname: hostNickname || 'Anfitrião',
@@ -63,9 +76,16 @@ async function createRoom({ name, hostUserId, hostNickname, hostSocketId, type, 
   // Save room stub to DB
   try {
     await db.execute({
-      sql: `INSERT INTO rooms (code, name, host_user_id, type, password, status, created_at)
-      VALUES (?, ?, ?, ?, ?, 'active', CURRENT_TIMESTAMP)`,
-      args: [code, roomName, hostUserId || null, roomType, roomPass]
+      sql: `INSERT INTO rooms (code, name, host_user_id, type, password, custom_rules, status, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, 'active', CURRENT_TIMESTAMP)`,
+      args: [
+        code,
+        roomName,
+        hostUserId || null,
+        roomType,
+        roomPass,
+        JSON.stringify({ rules: validCustomRules, notes: roomData.customRulesNotes })
+      ]
     });
   } catch (err) {
     console.error('Erro ao salvar sala no banco:', err.message);
@@ -83,6 +103,8 @@ function listActiveRooms() {
       type: room.type || 'pizza',
       hostNickname: room.hostNickname,
       hasPassword: Boolean(room.password),
+      hasCustomRules: Boolean(room.customRules && room.customRules.length > 0),
+      customRulesCount: room.customRules ? room.customRules.length : 0,
       participantsCount: room.participants.size,
       createdAt: room.createdAt
     }))
@@ -186,7 +208,7 @@ async function joinRoom({ code, socketId, userId, nickname, roomPassword }) {
   return { room: formatRoomPayload(room) };
 }
 
-function updateSlices({ code, socketId, delta }) {
+function updateSlices({ code, socketId, delta, itemName }) {
   const room = activeRooms.get(code);
   if (!room) return { error: 'Sala não encontrada.' };
   if (room.status !== 'active') return { error: 'A rodada já está encerrada.' };
@@ -195,27 +217,50 @@ function updateSlices({ code, socketId, delta }) {
   if (!participant) return { error: 'Participante não encontrado na sala.' };
 
   const oldSlices = participant.slices;
-  const newSlices = Math.max(0, oldSlices + delta);
-  if (newSlices === oldSlices) {
+  const numDelta = Number(delta) || 0;
+  const newSlices = Math.max(0, Math.round((oldSlices + numDelta) * 10) / 10);
+  if (newSlices === oldSlices && numDelta === 0) {
     return { room: formatRoomPayload(room) };
   }
 
   participant.slices = newSlices;
 
-  const isChurrasco = (room.type || '').toLowerCase() === 'churrasco';
-  const unitName = isChurrasco ? 'pedaço' : 'fatia';
+  const typeConfig = (room.type || '').toLowerCase();
+  const isChurrasco = typeConfig === 'churrasco';
+  const isJapones = typeConfig === 'japones';
+  const isHamburguer = typeConfig === 'hamburguer';
+  const isBebida = typeConfig === 'bebida';
+
+  let unitName = 'fatia';
+  let unitPlural = 'fatias';
+  if (isChurrasco) { unitName = 'pedaço'; unitPlural = 'pedaços'; }
+  else if (isJapones) { unitName = 'peça'; unitPlural = 'peças'; }
+  else if (isHamburguer) { unitName = 'burger'; unitPlural = 'burgers'; }
+  else if (isBebida) { unitName = 'copo'; unitPlural = 'copos'; }
+
+  const absPoints = Math.abs(numDelta);
+  const pointsLabel = absPoints === 1 ? unitName : unitPlural;
 
   let logText = '';
-  if (delta > 0) {
-    logText = `${participant.nickname} mandou pra dentro o ${unitName} nº ${newSlices}!`;
+  if (numDelta > 0) {
+    if (itemName) {
+      logText = `${participant.nickname} mandou pra dentro 1 ${itemName} (+${numDelta} ${pointsLabel})!`;
+    } else {
+      const article = (unitName === 'fatia' || unitName === 'peça') ? 'a' : 'o';
+      logText = `${participant.nickname} mandou pra dentro ${article} ${unitName} nº ${newSlices}!`;
+    }
   } else {
-    logText = `${participant.nickname} desfez 1 ${unitName} (Total: ${newSlices}).`;
+    if (itemName) {
+      logText = `${participant.nickname} desfez 1 ${itemName} (-${absPoints} ${pointsLabel}). (Total: ${newSlices})`;
+    } else {
+      logText = `${participant.nickname} desfez 1 ${unitName} (Total: ${newSlices}).`;
+    }
   }
 
   room.logs.unshift({
     id: Date.now(),
     text: logText,
-    type: delta > 0 ? 'slice_add' : 'slice_sub',
+    type: numDelta > 0 ? 'slice_add' : 'slice_sub',
     time: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
   });
 
@@ -364,6 +409,8 @@ function formatRoomPayload(room) {
     name: room.name,
     type: room.type || 'pizza',
     hasPassword: Boolean(room.password),
+    customRules: room.customRules || [],
+    customRulesNotes: room.customRulesNotes || null,
     hostSocketId: room.hostSocketId,
     hostUserId: room.hostUserId,
     hostNickname: room.hostNickname,
@@ -471,6 +518,9 @@ function getRoomInfo(code) {
     name: room.name,
     type: room.type || 'pizza',
     hasPassword: Boolean(room.password),
+    hasCustomRules: Boolean(room.customRules && room.customRules.length > 0),
+    customRules: room.customRules || [],
+    customRulesNotes: room.customRulesNotes || null,
     hostNickname: room.hostNickname,
     participantsCount: room.participants.size,
     status: room.status

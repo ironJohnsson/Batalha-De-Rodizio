@@ -158,13 +158,13 @@ export default function App() {
     };
   }, [restoreActiveSession]);
 
-  const handleCreateRoom = ({ name, hostUserId, hostNickname, type, password }) => {
+  const handleCreateRoom = ({ name, hostUserId, hostNickname, type, password, customRules, customRulesNotes }) => {
     if (!socket.connected) {
       alert('Não foi possível conectar ao servidor. Verifique sua conexão com a internet.');
       return;
     }
 
-    socket.emit('room:create', { name, hostUserId, hostNickname, type, password }, (response) => {
+    socket.emit('room:create', { name, hostUserId, hostNickname, type, password, customRules, customRulesNotes }, (response) => {
       if (response && response.success) {
         saveRoomSession(response.room.code, hostNickname, hostUserId, password);
         setCurrentRoom(response.room);
@@ -199,9 +199,9 @@ export default function App() {
     });
   };
 
-  const handleUpdateSlice = (delta) => {
+  const handleUpdateSlice = (delta, itemName) => {
     if (!currentRoom) return;
-    socket.emit('room:slice', { code: currentRoom.code, delta }, (response) => {
+    socket.emit('room:slice', { code: currentRoom.code, delta, itemName }, (response) => {
       if (response && response.success) {
         setCurrentRoom(response.room);
       }

@@ -28,14 +28,14 @@ app.use('/api/stats', statsRoutes);
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', time: new Date().toISOString() });
- });
+});
 
 app.get('/api/stats/active-rooms', (req, res) => {
   res.json({ rooms: roomsManager.listActiveRooms() });
 });
 
 // Serve frontend build in production
-const distPath = path.join(__dirname, '../BatalhaDeRodizio/dist');
+const distPath = path.join(__dirname, '../dist');
 app.use(express.static(distPath));
 
 // Setup Socket.IO
@@ -74,7 +74,7 @@ io.on('connection', (socket) => {
   });
 
   // Create Room
-  socket.on('room:create', async ({ name, hostUserId, hostNickname, password, type }, callback) => {
+  socket.on('room:create', async ({ name, hostUserId, hostNickname, password, type, customRules, customRulesNotes }, callback) => {
     try {
       const room = await roomsManager.createRoom({
         name,
@@ -82,7 +82,9 @@ io.on('connection', (socket) => {
         hostNickname: hostNickname || 'Anfitrião',
         hostSocketId: socket.id,
         password,
-        type
+        type,
+        customRules,
+        customRulesNotes
       });
       socket.join(room.code);
       console.log(`[Sala Criada] Código: ${room.code} (${room.type}) por ${hostNickname}`);
@@ -114,35 +116,34 @@ io.on('connection', (socket) => {
         if (typeof callback === 'function') {
           callback({ 
             success: false, 
-            error: result.error,
+            error: result.error, 
             requiresPassword: result.requiresPassword 
           });
         }
         return;
       }
 
-      const room = result.room;
-      socket.join(room.code);
-      console.log(`[Participante Entrou] ${nickname} entrou na sala ${room.code}`);
-
-      // Broadcast update to all in the room
-      io.to(room.code).emit('room:updated', room);
+      socket.join(code.toUpperCase().trim());
+      console.log(`[Socket] ${nickname} entrou na sala ${code}`);
+      
+      io.to(code.toUpperCase().trim()).emit('room:updated', result.room);
       io.emit('rooms:updated_list', roomsManager.listActiveRooms());
 
-      if (typeof callback === 'function') callback({ success: true, room });
+      if (typeof callback === 'function') callback({ success: true, room: result.room });
     } catch (err) {
       console.error('Erro ao entrar na sala:', err);
       if (typeof callback === 'function') callback({ success: false, error: 'Erro ao entrar na sala.' });
     }
   });
 
-  // Increment or Decrement Slices
-  socket.on('room:slice', ({ code, delta }, callback) => {
+  // Increment or Decrement Slices / Custom items
+  socket.on('room:slice', ({ code, delta, itemName }, callback) => {
     try {
       const result = roomsManager.updateSlices({
         code,
         socketId: socket.id,
-        delta: Number(delta) || 1
+        delta: Number(delta) || 1,
+        itemName
       });
 
       if (result.error) {
