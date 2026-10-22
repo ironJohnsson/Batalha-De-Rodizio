@@ -44,7 +44,6 @@ export default function AuthModal({ isOpen, onClose }) {
             size: 'large',
             text: tab === 'login' ? 'signin_with' : 'signup_with',
             shape: 'rectangular',
-            width: 320,
             locale: 'pt-BR'
           });
         } catch (err) {
@@ -214,9 +213,9 @@ export default function AuthModal({ isOpen, onClose }) {
           </span>
         </div>
 
-        {/* Botão Oficial do Google GIS */}
-        <div className="w-full flex justify-center py-1">
-          <div ref={googleBtnRef} className="w-full flex justify-center min-h-[44px]"></div>
+        {/* Botão Oficial do Google GIS com isolamento de color-scheme */}
+        <div className="w-full flex justify-center py-1 google-signin-wrapper" style={{ colorScheme: 'light' }}>
+          <div ref={googleBtnRef} className="flex justify-center min-h-[44px]" style={{ colorScheme: 'light' }}></div>
         </div>
 
         <p className="mt-4 text-center text-[11px] text-zinc-500 dark:text-zinc-400">

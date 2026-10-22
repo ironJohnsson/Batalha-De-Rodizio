@@ -34,3 +34,15 @@
 .animate-slice-pop {
   animation: slice-pop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
+
+/* Google Sign-in iframe fix for dark mode */
+.google-signin-wrapper,
+.google-signin-wrapper * {
+  color-scheme: light !important;
+}
+
+.google-signin-wrapper iframe {
+  color-scheme: light !important;
+  border-radius: 4px !important;
+  background-color: transparent !important;
+}
