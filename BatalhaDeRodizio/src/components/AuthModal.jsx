@@ -13,12 +13,11 @@ export default function AuthModal({ isOpen, onClose }) {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  if (!isOpen) return null;
-
   useEffect(() => {
     if (!isOpen) return;
 
     let timer;
+    let attempts = 0;
     const initGoogle = () => {
       if (window.google?.accounts?.id && googleBtnRef.current) {
         try {
@@ -51,7 +50,8 @@ export default function AuthModal({ isOpen, onClose }) {
         } catch (err) {
           console.warn('Erro ao inicializar botão do Google:', err);
         }
-      } else {
+      } else if (attempts < 25) {
+        attempts++;
         timer = setTimeout(initGoogle, 250);
       }
     };
@@ -90,6 +90,8 @@ export default function AuthModal({ isOpen, onClose }) {
       setLoading(false);
     }
   };
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
