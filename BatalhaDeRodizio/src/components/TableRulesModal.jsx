@@ -138,3 +138,4 @@ export default function TableRulesModal({ isOpen, onClose, room }) {
     </div>
   );
 }
+
