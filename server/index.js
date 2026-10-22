@@ -3,6 +3,7 @@ const http = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
 const path = require('path');
+const fs = require('fs');
 require('dotenv').config();
 
 const { initDb } = require('./db');
@@ -35,7 +36,12 @@ app.get('/api/stats/active-rooms', (req, res) => {
 });
 
 // Serve frontend build in production
-const distPath = path.join(__dirname, '../dist');
+const possibleDistPaths = [
+  path.join(__dirname, '../BatalhaDeRodizio/dist'),
+  path.join(__dirname, '../dist'),
+  path.join(__dirname, '../../BatalhaDeRodizio/dist')
+];
+const distPath = possibleDistPaths.find(p => fs.existsSync(p)) || possibleDistPaths[0];
 app.use(express.static(distPath));
 
 // Setup Socket.IO
