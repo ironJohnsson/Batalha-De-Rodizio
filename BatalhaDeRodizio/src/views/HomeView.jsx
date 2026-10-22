@@ -61,7 +61,7 @@ export default function HomeView({
   const [newRoomPassword, setNewRoomPassword] = useState('');
   const [showNewRoomPassword, setShowNewRoomPassword] = useState(false);
   // Custom Rules states
-  const [customRules, setCustomRules] = useState(() => getDefaultCustomRules('pizza'));
+  const [customRules, setCustomRules] = useState([]);
   const [customRulesNotes, setCustomRulesNotes] = useState('');
   const [showCustomRulesConfig, setShowCustomRulesConfig] = useState(false);
   const [newRuleName, setNewRuleName] = useState('');
@@ -244,7 +244,7 @@ export default function HomeView({
 
   const handleSelectRodizioType = (typeId) => {
     setSelectedRodizioType(typeId);
-    setCustomRules(getDefaultCustomRules(typeId));
+    setCustomRules([]);
   };
 
   const handleUpdateRulePoints = (ruleId, newPoints) => {
@@ -272,10 +272,6 @@ export default function HomeView({
     setNewRuleName('');
     setNewRulePoints(2);
     setShowAddRuleInput(false);
-  };
-
-  const handleResetRulesToDefault = () => {
-    setCustomRules(getDefaultCustomRules(selectedRodizioType));
   };
 
   // Execute Create after validation and rules acceptance
@@ -857,24 +853,13 @@ export default function HomeView({
 
                   {showCustomRulesConfig && (
                     <div className="p-4 pt-1 border-t border-zinc-200/80 dark:border-zinc-800/80 space-y-3.5 animate-in fade-in duration-150">
-                      <div className="flex items-center justify-between text-[11px] text-zinc-500 dark:text-zinc-400 pt-2">
+                      <div className="text-[11px] text-zinc-500 dark:text-zinc-400 pt-2">
                         <span>
                           Unidade base do rodízio:{' '}
                           <strong className="text-zinc-700 dark:text-zinc-200 font-bold">
                             1 {getRodizioConfig(selectedRodizioType).unitSingular} = 1 ponto
                           </strong>
                         </span>
-                        {customRules.length > 0 && (
-                          <button
-                            type="button"
-                            onClick={handleResetRulesToDefault}
-                            className="text-[10px] font-bold text-zinc-500 hover:text-orange-500 flex items-center gap-1 transition-colors cursor-pointer"
-                            title="Restaurar valores padrão"
-                          >
-                            <RotateCcw className="w-3 h-3" />
-                            <span>Padrão</span>
-                          </button>
-                        )}
                       </div>
 
                       {/* Lista de Regras / Itens */}
