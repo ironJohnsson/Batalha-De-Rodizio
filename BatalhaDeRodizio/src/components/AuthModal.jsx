@@ -19,6 +19,10 @@ export default function AuthModal({ isOpen, onClose }) {
     let timer;
     let attempts = 0;
     const initGoogle = () => {
+      if (googleBtnRef.current && googleBtnRef.current.children.length > 0) {
+        return; // Button already mounted, prevent flicker
+      }
+
       if (window.google?.accounts?.id && googleBtnRef.current) {
         try {
           window.google.accounts.id.initialize({
@@ -42,7 +46,7 @@ export default function AuthModal({ isOpen, onClose }) {
           window.google.accounts.id.renderButton(googleBtnRef.current, {
             theme: document.documentElement.classList.contains('dark') ? 'filled_black' : 'outline',
             size: 'large',
-            text: tab === 'login' ? 'signin_with' : 'signup_with',
+            text: 'continue_with',
             shape: 'rectangular',
             locale: 'pt-BR'
           });
@@ -59,7 +63,7 @@ export default function AuthModal({ isOpen, onClose }) {
     return () => {
       if (timer) clearTimeout(timer);
     };
-  }, [isOpen, tab]);
+  }, [isOpen]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -109,7 +113,7 @@ export default function AuthModal({ isOpen, onClose }) {
           <h2 className="text-xl font-bold text-zinc-900 dark:text-white">
             {tab === 'login' ? 'Acessar Conta' : 'Criar Nova Conta'}
           </h2>
-          <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
+          <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1 min-h-[32px] flex items-center justify-center text-center">
             {tab === 'login'
               ? 'Entre com seu apelido e senha para resgatar suas estatísticas.'
               : 'Cadastre seu apelido e senha para salvar seu histórico e vitórias.'}
